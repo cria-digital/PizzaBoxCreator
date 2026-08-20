@@ -1,0 +1,71 @@
+services:
+  db:
+    image: postgres:16-alpine
+    container_name: pizzabox-db
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: pizzabox
+      POSTGRES_PASSWORD: pizzabox_secret
+      POSTGRES_DB: pizzabox
+    ports:
+      - "5432:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U pizzabox"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+
+  app:
+    build: .
+    container_name: pizzabox-app
+    restart: unless-stopped
+    env_file: .env
+    depends_on:
+      db:
+        condition: service_healthy
+    ports:
+      - "8000:8000"
+    volumes:
+      - ./gabaritos:/app/gabaritos:ro
+      - ./storage:/app/storage
+      - ./assets:/app/assets:ro
+      - ./.env:/app/.env:ro
+    healthcheck:
+      test: ["CMD", "python", "-c", "import httpx; httpx.get('http://localhost:8000/health').raise_for_status()"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+
+  backup:
+    image: postgres:16-alpine
+    container_name: pizzabox-backup
+    restart: unless-stopped
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      PGPASSWORD: pizzabox_secret
+    volumes:
+      - backups:/backups
+    entrypoint: >
+      sh -c '
+      apk add --no-cache bash
+      echo "#!/bin/bash
+      set -e
+      FILENAME=pizzabox_$$\(date +\%Y\%m\%d_\%H\%M\%S\).sql.gz
+      pg_dump -h db -U pizzabox pizzabox | gzip > /backups/$$FILENAME
+      # Keep last 14 backups
+      ls -1t /backups/pizzabox_*.sql.gz | tail -n +15 | xargs -r rm
+      echo \"Backup complete: $$FILENAME\"
+      " > /backup.sh
+      chmod +x /backup.sh
+      # Run daily at 03:00 via crond
+      echo "0 3 * * * /backup.sh >> /var/log/backup.log 2>&1" | crontab -
+      crond -f -l 2
+      '
+
+volumes:
+  pgdata:
+  backups:

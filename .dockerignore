@@ -1,0 +1,16 @@
+.git
+.gitignore
+.venv
+.env
+__pycache__
+*.pyc
+.pytest_cache
+storage/
+temp/
+*.egg-info
+gabaritos/*.psd
+gabaritos/*.psb
+docs/
+tests/
+*.md
+!README.md

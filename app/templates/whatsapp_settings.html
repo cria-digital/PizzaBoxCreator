@@ -1,0 +1,97 @@
+{% extends "base.html" %}
+{% block title %}Integracao WhatsApp - Pizza Box Agent{% endblock %}
+
+{% block content %}
+<div class="page-header">
+  <h4><i class="bi bi-whatsapp" style="color: var(--brand-orange)"></i> Integracao WhatsApp (API oficial da Meta)</h4>
+  {% if whatsapp_enabled %}
+  <span class="badge badge-delivered">Ativa</span>
+  {% else %}
+  <span class="badge badge-inactive">Inativa</span>
+  {% endif %}
+</div>
+
+{% if msg %}
+<div class="alert alert-brand py-2 px-3 small">{{ msg }}</div>
+{% endif %}
+{% if error %}
+<div class="alert alert-danger py-2 px-3 small">{{ error }}</div>
+{% endif %}
+
+<div class="row g-3">
+  <div class="col-lg-7">
+    <div class="card shadow-sm border-0">
+      <div class="card-body">
+        <h6 class="fw-bold mb-3">Credenciais</h6>
+        <form method="POST" action="/configuracoes/whatsapp">
+          <div class="mb-3">
+            <label class="form-label fw-semibold">Token de acesso</label>
+            <input type="password" name="token" class="form-control" autocomplete="off"
+                   placeholder="{{ token_masked or 'cole o token permanente aqui' }}">
+            {% if token_masked %}
+            <div class="form-text">Atual: {{ token_masked }} — deixe em branco para manter.</div>
+            {% endif %}
+          </div>
+          <div class="mb-3">
+            <label class="form-label fw-semibold">Phone Number ID</label>
+            <input type="text" name="phone_number_id" class="form-control"
+                   value="{{ cfg.phone_number_id or '' }}" placeholder="123456789012345">
+          </div>
+          <div class="mb-3">
+            <label class="form-label fw-semibold">App Secret</label>
+            <input type="password" name="app_secret" class="form-control" autocomplete="off"
+                   placeholder="{{ app_secret_masked or 'Configuracoes do App -> Basico' }}">
+            {% if app_secret_masked %}
+            <div class="form-text">Atual: {{ app_secret_masked }} — deixe em branco para manter.</div>
+            {% endif %}
+          </div>
+          <div class="mb-3">
+            <label class="form-label fw-semibold">Verify Token do Webhook</label>
+            <input type="text" name="verify_token" class="form-control"
+                   value="{{ cfg.verify_token or '' }}" placeholder="escolha uma string qualquer">
+          </div>
+          <div class="mb-3">
+            <label class="form-label fw-semibold">Versao da API</label>
+            <input type="text" name="api_version" class="form-control" value="{{ api_version }}">
+          </div>
+          <button type="submit" class="btn btn-brand"><i class="bi bi-save"></i> Salvar</button>
+        </form>
+      </div>
+    </div>
+  </div>
+
+  <div class="col-lg-5">
+    <div class="card shadow-sm border-0 mb-3">
+      <div class="card-body">
+        <h6 class="fw-bold mb-3">Configuracao no painel da Meta</h6>
+        <label class="form-label fw-semibold small">URL do Webhook</label>
+        <div class="input-group input-group-sm mb-3">
+          <input type="text" class="form-control" value="{{ webhook_url }}" readonly>
+        </div>
+        <p class="small text-muted mb-0">
+          No app da Meta (developers.facebook.com), produto WhatsApp → Configuration → Webhook:
+          cole essa URL e o mesmo Verify Token salvo ao lado. Precisa de HTTPS publico
+          (em desenvolvimento, use <code>ngrok http 8000</code>).
+          Subscreva o campo <code>messages</code>.
+        </p>
+      </div>
+    </div>
+
+    <div class="card shadow-sm border-0">
+      <div class="card-body">
+        <h6 class="fw-bold mb-3">Testar conexao</h6>
+        <form method="POST" action="/configuracoes/whatsapp/testar">
+          <div class="input-group input-group-sm">
+            <input type="text" name="telefone_teste" class="form-control" required
+                   placeholder="5511999998888">
+            <button type="submit" class="btn btn-dark-brand">
+              <i class="bi bi-send"></i> Enviar teste
+            </button>
+          </div>
+          <div class="form-text">Envia uma mensagem de texto real usando as credenciais salvas.</div>
+        </form>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}

@@ -1,0 +1,22 @@
+{
+  "LOGO_CLIENTE": {
+    "x": 2295,
+    "y": 5756,
+    "width": 249,
+    "height": 249
+  },
+  "TEXTO_TELEFONE": {
+    "x": 2640,
+    "y": 5783,
+    "width": 1283,
+    "height": 133,
+    "font_size": 103
+  },
+  "TEXTO_INSTAGRAM": {
+    "x": 2640,
+    "y": 5922,
+    "width": 1283,
+    "height": 106,
+    "font_size": 82
+  }
+}

@@ -1,0 +1,97 @@
+{% extends "base.html" %}
+{% block title %}Clientes - Pizza Box Agent{% endblock %}
+
+{% block content %}
+<div class="page-header">
+  <h4><i class="bi bi-people" style="color: var(--brand-orange)"></i> Clientes</h4>
+  <button class="btn btn-brand btn-sm" data-bs-toggle="modal" data-bs-target="#clientModal">
+    <i class="bi bi-plus-lg"></i> Novo Cliente
+  </button>
+</div>
+
+<div class="row mb-3">
+  <div class="col-md-4">
+    <form method="GET" action="/clientes">
+      <div class="input-group input-group-sm">
+        <input type="text" name="search" class="form-control" placeholder="Buscar nome ou telefone..."
+               value="{{ search or '' }}">
+        <button class="btn btn-brand"><i class="bi bi-search"></i></button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<div class="card shadow-sm border-0">
+  <div class="table-responsive">
+    <table class="table table-hover mb-0 align-middle">
+      <thead>
+        <tr>
+          <th>Nome</th>
+          <th>Telefone</th>
+          <th>Instagram</th>
+          <th>Pedidos</th>
+          <th>Desde</th>
+          <th></th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for c in clients %}
+        <tr>
+          <td class="fw-semibold"><span class="client-avatar">{{ c.name[0]|upper }}</span>{{ c.name }}</td>
+          <td>{{ c.phone }}</td>
+          <td class="text-muted">{{ c.instagram or '-' }}</td>
+          <td>
+            <a href="/funil?client_id={{ c.id }}" class="badge badge-preview text-decoration-none">
+              {{ c.order_count }} pedidos
+            </a>
+          </td>
+          <td class="text-muted small">{{ c.created_at[:10] }}</td>
+          <td>
+            <a href="/pedidos/novo?client_phone={{ c.phone }}" class="btn btn-brand-outline btn-sm py-0 px-2" style="font-size:0.75rem">
+              <i class="bi bi-plus"></i> Pedido
+            </a>
+          </td>
+        </tr>
+        {% endfor %}
+        {% if not clients %}
+        <tr>
+          <td colspan="6" class="text-muted text-center py-5">
+            <i class="bi bi-people" style="font-size:2rem; opacity:0.3"></i><br>
+            Nenhum cliente cadastrado
+          </td>
+        </tr>
+        {% endif %}
+      </tbody>
+    </table>
+  </div>
+</div>
+
+<!-- New client modal -->
+<div class="modal fade" id="clientModal" tabindex="-1">
+  <div class="modal-dialog">
+    <form method="POST" action="/clientes/novo" class="modal-content">
+      <div class="modal-header border-0">
+        <h5 class="modal-title fw-bold">Novo Cliente</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body">
+        <div class="mb-3">
+          <label class="form-label fw-semibold">Nome *</label>
+          <input type="text" name="name" class="form-control" required placeholder="Pizzaria do Joao">
+        </div>
+        <div class="mb-3">
+          <label class="form-label fw-semibold">Telefone *</label>
+          <input type="text" name="phone" class="form-control" required placeholder="(11) 99999-9999">
+        </div>
+        <div class="mb-3">
+          <label class="form-label fw-semibold">Instagram</label>
+          <input type="text" name="instagram" class="form-control" placeholder="@pizzaria">
+        </div>
+      </div>
+      <div class="modal-footer border-0">
+        <button type="submit" class="btn btn-brand">Cadastrar</button>
+      </div>
+    </form>
+  </div>
+</div>
+{% endblock %}

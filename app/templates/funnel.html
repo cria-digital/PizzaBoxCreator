@@ -1,0 +1,51 @@
+{% extends "base.html" %}
+{% block title %}Funil de Pedidos - Pizza Box Agent{% endblock %}
+
+{% block content %}
+<div class="page-header">
+  <h4><i class="bi bi-kanban" style="color: var(--brand-orange)"></i> Funil de Pedidos</h4>
+  <a href="/pedidos/novo" class="btn btn-brand btn-sm">
+    <i class="bi bi-plus-lg"></i> Novo Pedido
+  </a>
+</div>
+
+<div class="kanban-board">
+  {% set columns = [
+    ("draft", "Rascunho", "draft"),
+    ("preview_sent", "Preview Enviado", "preview"),
+    ("revision", "Em Revisao", "revision"),
+    ("production", "Producao", "production"),
+    ("delivered", "Entregue", "delivered")
+  ] %}
+
+  {% for status, label, css_key in columns %}
+  <div class="kanban-column">
+    <div class="kanban-header kanban-header-{{ css_key }}">
+      <span class="badge badge-{{ css_key }} me-1">{{ orders_by_status.get(status, [])|length }}</span>
+      {{ label }}
+    </div>
+    <div class="kanban-cards">
+      {% for order in orders_by_status.get(status, []) %}
+      <a href="/pedidos/{{ order.id }}" class="kanban-card card mb-2 text-decoration-none">
+        <div class="card-body p-2">
+          {% if order.preview_jpg %}
+          <img src="/api/orders/{{ order.id }}/preview" class="kanban-thumb mb-2" alt="preview">
+          {% endif %}
+          <div class="fw-semibold small text-dark">{{ order.client_name }}</div>
+          <div class="text-muted" style="font-size:0.72rem">{{ order.template_name }}</div>
+          <div class="text-muted" style="font-size:0.65rem">
+            <i class="bi bi-clock"></i> {{ order.updated_at[:16] }}
+          </div>
+        </div>
+      </a>
+      {% endfor %}
+      {% if not orders_by_status.get(status) %}
+      <div class="text-muted text-center small py-4" style="opacity:0.5">
+        <i class="bi bi-inbox"></i><br>Vazio
+      </div>
+      {% endif %}
+    </div>
+  </div>
+  {% endfor %}
+</div>
+{% endblock %}
