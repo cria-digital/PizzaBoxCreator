@@ -118,7 +118,7 @@ def main() -> int:
         result: dict[str, Any] = {}
         ok = False
         hits = 0
-        field_total = len(case.get("expected", {}))
+        field_total = 1 if case.get("expected_error") else len(case.get("expected", {}))
 
         try:
             command = agent.parse_message(case["message"])
@@ -126,6 +126,8 @@ def main() -> int:
             if case.get("expected_error"):
                 ok = False
                 error = "expected_error_but_model_returned_command"
+                hits = 0
+                field_total = 1
             else:
                 hits, field_total, ok = _score(result, case.get("expected", {}))
         except Exception as exc:  # noqa: BLE001 - benchmark records provider/model failures
