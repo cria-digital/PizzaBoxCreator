@@ -412,6 +412,7 @@ IA e da Meta são mockadas.
 | `whatsapp_send_test.py` | Envia uma mensagem de teste pela API da Meta |
 | `demo.py` | Demonstração do fluxo |
 | `backup.sh` | Backup manual de SQLite ou PostgreSQL |
+| `smoke_railway.py` | Valida uma URL publicada do Railway (`/health`, login, métricas e catálogo) |
 
 ---
 
@@ -474,6 +475,7 @@ logo, arte plana e JSON de posições. Veja
 |---|---|
 | [docs/PREPARACAO_GABARITO.md](docs/PREPARACAO_GABARITO.md) | **Designer** — como preparar o PSD |
 | [docs/ARQUITETURA_OPERACIONAL.md](docs/ARQUITETURA_OPERACIONAL.md) | Arquitetura atual, deploy e pendências |
+| [docs/GO_LIVE_CHECKLIST.md](docs/GO_LIVE_CHECKLIST.md) | Checklist de deploy, variáveis e validação |
 | [docs/RELATORIO_DIAGNOSTICO.md](docs/RELATORIO_DIAGNOSTICO.md) | Diagnóstico técnico e proposta de mudança |
 | [RELATORIO_STATUS.md](RELATORIO_STATUS.md) | Status do projeto em linguagem de negócio |
 | [CLAUDE.md](CLAUDE.md) | Contexto para assistentes de IA que trabalhem no repo |
