@@ -72,6 +72,24 @@ Checagem rápida de saúde: `curl http://localhost:8000/health`
 
 Sem o extra `logo`, a logo do cliente é aplicada como veio (com fundo).
 
+### Deploy no Railway
+
+O repositório já inclui `Dockerfile` e `railway.json`. No Railway:
+
+1. Crie um projeto e adicione um banco **Postgres** gerenciado.
+2. Adicione um serviço a partir do GitHub `cria-digital/pizza-box-agent`.
+3. No serviço do app, configure:
+   - `DATABASE_URL=${{Postgres.DATABASE_URL}}`
+   - `ADMIN_PASSWORD=<senha forte>`
+   - `SECRET_KEY=<chave longa gerada>`
+   - `SECURE_COOKIES=true`
+   - `CORS_ORIGINS=https://<dominio-do-app>`
+   - chaves de IA e Meta, quando forem usadas
+4. Gere o domínio público do serviço.
+
+O container executa `alembic upgrade head`, popula o catálogo a partir de `gabaritos/` e sobe o
+FastAPI na porta `PORT` injetada pelo Railway. O healthcheck configurado é `/health`.
+
 ---
 
 ## 2. O que NÃO está no repositório

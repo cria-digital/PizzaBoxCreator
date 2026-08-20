@@ -68,10 +68,14 @@ boot aplica migracoes aditivas pequenas para colunas novas, como `orders.created
 O deploy de referencia usa:
 
 - `Dockerfile` para a aplicacao FastAPI;
+- `railway.json` com Dockerfile builder e healthcheck em `/health`;
 - `docker-compose.yml` com PostgreSQL 16, app e servico de backup;
 - `scripts/backup.sh` para backup manual de SQLite ou PostgreSQL;
 - `/metrics` em formato Prometheus;
 - logs estruturados JSON.
+
+No Railway, use Postgres gerenciado e referencie `DATABASE_URL` do servico Postgres no servico do
+app. O container roda as migracoes Alembic e popula o catalogo no start antes de abrir o servidor.
 
 Antes de expor publicamente:
 

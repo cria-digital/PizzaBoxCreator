@@ -70,13 +70,15 @@ class Settings(BaseSettings):
         return [o.strip() for o in self.cors_origins.split(",") if o.strip()] or ["*"]
 
     @model_validator(mode="after")
-    def _warn_weak_credentials(self) -> "Settings":
+    def _normalize_and_validate(self) -> "Settings":
         """Flag weak ADMIN_PASSWORD/SECRET_KEY instead of failing startup.
 
         Kept as a warning (not a hard error) because short passwords are
         legitimately used for local/dev testing; this just makes sure it's
         not silently carried into a real deployment.
         """
+        if self.database_url.startswith("postgres://"):
+            self.database_url = "postgresql://" + self.database_url.removeprefix("postgres://")
         if len(self.admin_password) < 12:
             logger.warning(
                 "ADMIN_PASSWORD tem menos de 12 caracteres -- ok para testes locais, "

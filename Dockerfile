@@ -20,6 +20,9 @@ RUN pip install --no-cache-dir ".[gemini]"
 
 # Copy application code.
 COPY app/ app/
+COPY assets/ assets/
+COPY gabaritos/ gabaritos/
+COPY scripts/ scripts/
 COPY alembic.ini ./
 COPY alembic/ alembic/
 
@@ -28,4 +31,4 @@ RUN mkdir -p storage/output storage/preview storage/thumbnails storage/logos tem
 
 EXPOSE 8000
 
-CMD ["sh", "-c", "alembic upgrade head && python -m uvicorn app.main:app --host 0.0.0.0 --port 8000"]
+CMD ["sh", "-c", "alembic upgrade head && python scripts/seed_catalog.py && python -m uvicorn app.main:app --host 0.0.0.0 --port ${PORT:-8000}"]
