@@ -16,7 +16,7 @@ logger = logging.getLogger(__name__)
 
 class DesignAgent:
     def parse_message(self, message: str, logo_path: str | None = None) -> EditCommand:
-        """Send the user message to the configured AI (Claude/Gemini), return an EditCommand."""
+        """Send the user message to the configured AI, return an EditCommand."""
         raw = text_completion(SYSTEM_PROMPT, message)
         logger.info("LLM response: %s", raw)
 

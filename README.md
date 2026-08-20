@@ -241,13 +241,25 @@ Todas as variáveis estão documentadas em [.env.example](.env.example). As **ob
 |---|---|---|
 | `ADMIN_PASSWORD` | ✅ sim | Sem default — o app não sobe sem ela |
 | `SECRET_KEY` | ✅ sim | Assina o cookie de sessão |
-| `ANTHROPIC_API_KEY` ou `GEMINI_API_KEY` | ✅ uma das duas | Sem chave, a IA fica indisponível |
+| `ANTHROPIC_API_KEY`, `GEMINI_API_KEY` ou `AI_PROVIDER=ollama` | ✅ uma opção | Ollama cobre apenas texto; precisa do servidor Ollama rodando |
 | `GEMINI_API_KEY` | para `/ai-preview` | **Só o Gemini gera imagem**; obrigatória para o preview de aprovação, mesmo usando Claude no texto |
 | `PRODUCTION_DPI` | não (350) | DPI carimbado no arquivo de produção |
 | `META_*` | não | WhatsApp desligado se em branco |
 
 Modelos de IA usados hoje ([app/ai/providers.py](app/ai/providers.py)): `claude-haiku-4-5`
-(texto e visão), `gemini-2.5-flash` (texto e visão) e `GEMINI_IMAGE_MODEL` (imagem).
+(texto e visão), `gemini-2.5-flash` (texto e visão), `GEMINI_IMAGE_MODEL` (imagem)
+e `OLLAMA_MODEL` para Llama local/self-hosted em tarefas de texto.
+
+Para testar Llama sem custo de API, instale o Ollama e rode:
+
+```bash
+ollama serve
+ollama pull llama3.2:3b
+AI_PROVIDER=ollama OLLAMA_MODEL=llama3.2:3b python -m uvicorn app.main:app --reload
+```
+
+No Railway, `localhost` e gratuito so funcionam se voce tambem subir/ligar um servico Ollama
+no mesmo ambiente ou apontar `OLLAMA_BASE_URL` para uma instancia propria.
 
 Antes de expor o app na internet: troque `CORS_ORIGINS=*` por origens explícitas e ligue
 `SECURE_COOKIES=true` (exige HTTPS).

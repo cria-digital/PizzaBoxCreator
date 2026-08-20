@@ -43,6 +43,14 @@ AI_PREVIEW_CACHE_ENABLED=true
 AI_PREVIEW_CACHE_TTL_HOURS=24
 ```
 
+Opcional para Llama/Ollama (texto apenas):
+
+```text
+AI_PROVIDER=ollama
+OLLAMA_BASE_URL=http://<servico-ollama>:11434
+OLLAMA_MODEL=llama3.2:3b
+```
+
 Opcional para WhatsApp:
 
 ```text

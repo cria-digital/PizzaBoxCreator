@@ -1,18 +1,21 @@
-"""Provider-agnostic LLM access: routes text/vision calls to Claude (Anthropic) or Gemini.
+"""Provider-agnostic LLM access: routes text/vision calls to Claude, Gemini or Ollama.
 
 Both `app.ai.agent` (message parsing) and `app.ai.vision` (box-photo analysis) go through here,
 so the app works with whichever provider is configured. Selection is driven by settings:
 - ai_provider="anthropic" -> Claude only
 - ai_provider="gemini"    -> Gemini only
+- ai_provider="ollama"    -> local/self-hosted Llama via Ollama for text only
 - ai_provider="auto"      -> use whichever key is set (Claude preferred if both).
 
-Each provider SDK is imported lazily and is optional; a missing SDK or key raises AIUnavailable.
+Each provider SDK is imported lazily and is optional; a missing SDK/key/server raises AIUnavailable.
 """
 
 from __future__ import annotations
 
 import base64
 import logging
+
+import httpx
 
 from app.config import settings
 
@@ -37,7 +40,7 @@ def ai_configured() -> bool:
 
 
 def active_provider() -> str:
-    """Return the provider to use ('anthropic' | 'gemini'), or raise AIUnavailable."""
+    """Return the provider to use ('anthropic' | 'gemini' | 'ollama'), or raise AIUnavailable."""
     choice = (settings.ai_provider or "auto").lower()
     if choice == "anthropic":
         if settings.anthropic_api_key:
@@ -45,13 +48,17 @@ def active_provider() -> str:
     elif choice == "gemini":
         if settings.gemini_api_key:
             return "gemini"
+    elif choice == "ollama":
+        if settings.ollama_base_url and settings.ollama_model:
+            return "ollama"
     else:  # auto — prefer Anthropic when both are set
         if settings.anthropic_api_key:
             return "anthropic"
         if settings.gemini_api_key:
             return "gemini"
     raise AIUnavailable(
-        "Nenhuma IA configurada. Defina ANTHROPIC_API_KEY ou GEMINI_API_KEY no .env "
+        "Nenhuma IA configurada. Defina ANTHROPIC_API_KEY, GEMINI_API_KEY ou "
+        "AI_PROVIDER=ollama com Ollama rodando "
         f"(AI_PROVIDER={choice})."
     )
 
@@ -61,6 +68,8 @@ def text_completion(system: str, user_text: str) -> str:
     provider = active_provider()
     if provider == "anthropic":
         return _anthropic_text(system, user_text)
+    if provider == "ollama":
+        return _ollama_text(system, user_text)
     return _gemini_text(system, user_text)
 
 
@@ -69,6 +78,11 @@ def vision_completion(system: str, image_bytes: bytes, media_type: str, prompt: 
     provider = active_provider()
     if provider == "anthropic":
         return _anthropic_vision(system, image_bytes, media_type, prompt)
+    if provider == "ollama":
+        raise AIUnavailable(
+            "Ollama/Llama esta configurado apenas para texto. Para analise de foto, "
+            "use ANTHROPIC_API_KEY ou GEMINI_API_KEY."
+        )
     return _gemini_vision(system, image_bytes, media_type, prompt)
 
 
@@ -135,6 +149,42 @@ def _anthropic_vision(system: str, image_bytes: bytes, media_type: str, prompt: 
         ]}],
     )
     return resp.content[0].text.strip()
+
+
+# --- Ollama (local/self-hosted Llama) ---------------------------------------
+
+def _ollama_text(system: str, user_text: str) -> str:
+    """Call Ollama's local REST API for text-only Llama models."""
+    base_url = settings.ollama_base_url.rstrip("/")
+    try:
+        resp = httpx.post(
+            f"{base_url}/api/chat",
+            json={
+                "model": settings.ollama_model,
+                "messages": [
+                    {"role": "system", "content": system},
+                    {"role": "user", "content": user_text},
+                ],
+                "stream": False,
+                "options": {"temperature": 0},
+            },
+            timeout=60,
+        )
+        resp.raise_for_status()
+    except httpx.RequestError as e:
+        raise AIUnavailable(
+            f"Ollama indisponivel em {base_url}. Rode `ollama serve` e "
+            f"`ollama pull {settings.ollama_model}`."
+        ) from e
+    except httpx.HTTPStatusError as e:
+        detail = e.response.text[:300]
+        raise AIUnavailable(f"Ollama retornou erro {e.response.status_code}: {detail}") from e
+
+    payload = resp.json()
+    content = payload.get("message", {}).get("content") or payload.get("response") or ""
+    if not content.strip():
+        raise AIUnavailable("Ollama nao retornou texto.")
+    return content.strip()
 
 
 # --- Gemini (Google) ---------------------------------------------------------

@@ -13,6 +13,8 @@ def _no_live_ai(monkeypatch):
     monkeypatch.setattr(settings, "anthropic_api_key", "")
     monkeypatch.setattr(settings, "gemini_api_key", "")
     monkeypatch.setattr(settings, "ai_provider", "auto")
+    monkeypatch.setattr(settings, "ollama_base_url", "http://localhost:11434")
+    monkeypatch.setattr(settings, "ollama_model", "llama3.2:3b")
 
 
 @pytest.fixture(autouse=True)

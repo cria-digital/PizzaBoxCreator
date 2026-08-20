@@ -10,8 +10,11 @@ logger = logging.getLogger(__name__)
 class Settings(BaseSettings):
     anthropic_api_key: str = ""
     gemini_api_key: str = ""
-    # Qual IA usar: "auto" (usa a chave que estiver configurada), "anthropic" ou "gemini".
+    # Qual IA usar: "auto" (usa a chave que estiver configurada), "anthropic", "gemini" ou "ollama".
     ai_provider: str = "auto"
+    # Ollama/Llama local para tarefas de texto. Requer o servidor Ollama rodando.
+    ollama_base_url: str = "http://localhost:11434"
+    ollama_model: str = "llama3.2:3b"
     # Geracao de imagem (preview de aprovacao do cliente). So o Gemini gera imagem aqui.
     gemini_image_model: str = "gemini-3-pro-image"
     ai_preview_aspect_ratio: str = "16:9"
