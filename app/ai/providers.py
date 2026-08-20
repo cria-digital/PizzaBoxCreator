@@ -166,6 +166,7 @@ def _ollama_text(system: str, user_text: str) -> str:
                     {"role": "user", "content": user_text},
                 ],
                 "stream": False,
+                "format": "json",
                 "options": {"temperature": 0},
             },
             timeout=60,

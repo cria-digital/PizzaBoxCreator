@@ -78,6 +78,7 @@ def test_text_completion_routes_to_ollama(keys, monkeypatch):
         assert url == "http://ollama.test/api/chat"
         assert json["model"] == "llama3.2:3b"
         assert json["stream"] is False
+        assert json["format"] == "json"
         assert json["messages"][0]["role"] == "system"
         assert json["messages"][1]["content"] == "oi"
         assert timeout == 60

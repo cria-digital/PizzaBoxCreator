@@ -33,6 +33,8 @@ class DesignAgent:
         if "erro" in data:
             raise ValueError(f"LLM escalou para humano: {data.get('motivo', 'sem motivo')}")
 
+        data = _normalize_llm_data(data)
+
         if logo_path:
             data["logo_path"] = logo_path
 
@@ -51,6 +53,18 @@ def parse_message_to_dict(message: str) -> dict:
         cmd = parse_message_offline(message)
 
     return {k: v for k, v in cmd.model_dump().items() if v is not None and v is not False}
+
+
+def _normalize_llm_data(data: dict) -> dict:
+    """Coerce common LLM synonyms into the enums accepted by the app."""
+    theme = data.get("tema_fundo")
+    if isinstance(theme, str):
+        normalized = theme.strip().lower()
+        if normalized in {"premium", "preto", "preta", "escuro", "escura", "elegante"}:
+            data["tema_fundo"] = "premium"
+        elif normalized in {"tradicional", "kraft", "marrom"}:
+            data["tema_fundo"] = "tradicional"
+    return data
 
 
 def parse_message_offline(message: str) -> EditCommand:

@@ -52,3 +52,17 @@ def test_parse_message_to_dict_uses_offline_without_api_key(monkeypatch):
     result = parse_message_to_dict("meu telefone e (11) 98888-7777")
     assert result["telefone"] == "(11) 98888-7777"
     assert "adicionar_selo_entrega" not in result  # False values are dropped
+
+
+def test_llm_parser_normalizes_theme_synonyms(monkeypatch):
+    from app.ai import agent
+
+    monkeypatch.setattr(
+        agent,
+        "text_completion",
+        lambda system, message: '{"instagram":"@pizza","tema_fundo":"elegante"}',
+    )
+
+    cmd = agent.DesignAgent().parse_message("visual elegante com @pizza")
+    assert cmd.instagram == "@pizza"
+    assert cmd.tema_fundo == TemaFundo.premium
