@@ -4,7 +4,7 @@ Revision ID: 68d32d782435
 Revises: 9c9d5c013d3d
 Create Date: 2026-08-19
 """
-from alembic import op
+from alembic import context, op
 import sqlalchemy as sa
 
 revision = '68d32d782435'
@@ -14,6 +14,33 @@ depends_on = None
 
 
 def upgrade() -> None:
+    if context.is_offline_mode():
+        op.execute("ALTER TABLE admin_account DROP CONSTRAINT IF EXISTS admin_account_id_check")
+        op.execute("ALTER TABLE admin_account DROP CONSTRAINT IF EXISTS admin_single_row")
+        op.execute(
+            "ALTER TABLE orders ADD COLUMN IF NOT EXISTS created_by VARCHAR"
+        )
+        op.execute(
+            "CREATE TABLE IF NOT EXISTS audit_log ("
+            "id SERIAL PRIMARY KEY, "
+            "order_id INTEGER REFERENCES orders(id), "
+            "username VARCHAR NOT NULL, "
+            "action VARCHAR NOT NULL, "
+            "details JSON, "
+            "created_at TIMESTAMPTZ NOT NULL DEFAULT NOW())"
+        )
+        op.execute(
+            "CREATE INDEX IF NOT EXISTS idx_audit_log_order ON audit_log (order_id)"
+        )
+        op.execute(
+            "CREATE INDEX IF NOT EXISTS idx_audit_log_user ON audit_log (username)"
+        )
+        op.execute(
+            "CREATE UNIQUE INDEX IF NOT EXISTS uq_admin_account_username "
+            "ON admin_account (username)"
+        )
+        return
+
     # Allow multiple admin users (remove single-row constraint if it exists).
     conn = op.get_bind()
     constraints = conn.execute(sa.text(

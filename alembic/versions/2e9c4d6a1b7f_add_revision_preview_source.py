@@ -5,7 +5,7 @@ Revises: 68d32d782435
 Create Date: 2026-08-20
 """
 
-from alembic import op
+from alembic import context, op
 import sqlalchemy as sa
 
 
@@ -16,6 +16,13 @@ depends_on = None
 
 
 def upgrade() -> None:
+    if context.is_offline_mode():
+        op.execute(
+            "ALTER TABLE order_revisions "
+            "ADD COLUMN IF NOT EXISTS preview_source VARCHAR NOT NULL DEFAULT 'psd'"
+        )
+        return
+
     conn = op.get_bind()
     has_col = conn.execute(sa.text(
         "SELECT 1 FROM information_schema.columns "
