@@ -5,7 +5,12 @@ import json
 from PIL import Image
 
 from app.ai.box_designer import build_box_prompt
-from app.print_specs.art_master import build_art_master, save_approval_preview, trim_generated_mockup_margin
+from app.print_specs.art_master import (
+    build_art_master,
+    cover_light_edge_leaks,
+    save_approval_preview,
+    trim_generated_mockup_margin,
+)
 
 
 def _write_spec(path):
@@ -77,6 +82,43 @@ def test_trim_generated_mockup_margin_ignores_full_bleed_art():
 
     assert trimmed.size == image.size
     assert info["trimmed"] is False
+
+
+def test_cover_light_edge_leaks_fills_bright_corner_only():
+    image = Image.new("RGB", (120, 80), (12, 20, 32))
+    for x in range(0, 22):
+        for y in range(0, 24):
+            image.putpixel((x, y), (238, 238, 240))
+    image.putpixel((70, 40), (238, 238, 240))
+
+    repaired, info = cover_light_edge_leaks(image)
+
+    assert info["applied"] is True
+    assert repaired.getpixel((5, 5)) != (238, 238, 240)
+    assert repaired.getpixel((70, 40)) == (238, 238, 240)
+
+
+def test_build_art_master_can_cover_light_edge_leaks(tmp_path):
+    source = tmp_path / "source.png"
+    spec = tmp_path / "spec.json"
+    master = tmp_path / "master.png"
+    image = Image.new("RGB", (400, 200), (15, 20, 32))
+    for x in range(0, 40):
+        for y in range(0, 50):
+            image.putpixel((x, y), (238, 238, 240))
+    image.save(source)
+    _write_spec(spec)
+
+    result = build_art_master(
+        source_path=source,
+        spec_path=spec,
+        output_path=master,
+        fit_mode="stretch",
+        cover_edge_leaks=True,
+    )
+
+    assert result["edge_leak_repair"]["applied"] is True
+    assert Image.open(master).convert("RGB").getpixel((4, 4)) != (238, 238, 240)
 
 
 def test_save_approval_preview_respects_max_width(tmp_path):

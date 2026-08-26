@@ -402,6 +402,7 @@ def _ai_test_view_model(result: dict | None) -> dict | None:
         "source_px": result.get("master", {}).get("source_px"),
         "canvas_px": result.get("master", {}).get("canvas_px"),
         "margin_trim": result.get("master", {}).get("margin_trim"),
+        "edge_leak_repair": result.get("master", {}).get("edge_leak_repair"),
         "tac_after": result.get("cmyk", {}).get("tac_after"),
         "pdf": result.get("pdf", {}),
     }

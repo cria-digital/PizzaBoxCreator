@@ -177,6 +177,7 @@ def run_ai_art_pipeline(
         output_path=raw_master_path,
         fit_mode=fit_mode,
         auto_trim_mockup_margin=True,
+        cover_edge_leaks=True,
     )
     check_cancelled()
     composition_result = compose_safe_critical_content(

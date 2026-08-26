@@ -165,6 +165,9 @@
               {% if result.margin_trim %}
               <div class="small">Crop margem IA: {{ 'sim' if result.margin_trim.trimmed else 'nao' }}</div>
               {% endif %}
+              {% if result.edge_leak_repair %}
+              <div class="small">Reparo borda clara: {{ 'sim' if result.edge_leak_repair.applied else 'nao' }}</div>
+              {% endif %}
               {% if result.technical_reference_error %}
               <div class="small text-danger">Guia faca: falhou</div>
               {% endif %}

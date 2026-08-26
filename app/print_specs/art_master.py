@@ -6,6 +6,7 @@ import json
 from pathlib import Path
 from typing import Any
 
+import numpy as np
 from PIL import Image, ImageChops, ImageDraw, ImageFilter, ImageFont, ImageStat
 
 from app.print_specs.preflight import fit_image_to_canvas, load_die_spec
@@ -130,6 +131,115 @@ def trim_generated_mockup_margin(
     return source.crop((left, top, right, bottom)), info
 
 
+def cover_light_edge_leaks(
+    image: Image.Image,
+    *,
+    threshold: int = 214,
+    saturation_delta: int = 34,
+    max_edge_fraction: float = 0.18,
+) -> tuple[Image.Image, dict[str, Any]]:
+    """Fill bright neutral areas connected to canvas edges with nearby artwork."""
+    source = image.convert("RGB")
+    analysis_size = _analysis_size(source.size, max_width=900)
+    analysis = source.resize(analysis_size, Image.Resampling.BOX)
+    mask = _light_neutral_mask(analysis, threshold=threshold, saturation_delta=saturation_delta)
+    edge_mask_small = _edge_connected_mask(
+        mask,
+        max_edge_px=round(min(analysis.size) * max_edge_fraction),
+    )
+    bbox = edge_mask_small.getbbox()
+    info: dict[str, Any] = {
+        "applied": False,
+        "threshold": threshold,
+        "saturation_delta": saturation_delta,
+        "analysis_px": {"width": analysis.width, "height": analysis.height},
+    }
+    if not bbox:
+        info["reason"] = "sem vazamento claro conectado a borda"
+        return source, info
+
+    total = analysis.width * analysis.height
+    covered_px = sum(edge_mask_small.histogram()[1:])
+    covered_fraction = covered_px / max(1, total)
+    info["covered_fraction"] = round(covered_fraction, 5)
+    sx = source.width / analysis.width
+    sy = source.height / analysis.height
+    info["bbox"] = {
+        "left": round(bbox[0] * sx),
+        "top": round(bbox[1] * sy),
+        "right": round(bbox[2] * sx),
+        "bottom": round(bbox[3] * sy),
+    }
+    if covered_fraction > 0.18:
+        info["reason"] = "area clara grande demais para reparo automatico"
+        return source, info
+
+    filled = source.copy()
+    color = _dominant_non_light_color(source)
+    repair_size = _analysis_size(source.size, max_width=1400)
+    blurred_small = source.resize(repair_size, Image.Resampling.BOX).filter(
+        ImageFilter.GaussianBlur(radius=max(10, min(repair_size) // 70))
+    )
+    blurred = blurred_small.resize(source.size, Image.Resampling.BICUBIC)
+    base = Image.new("RGB", source.size, color)
+    repaired = Image.blend(base, blurred, 0.34)
+    edge_mask = edge_mask_small.resize(source.size, Image.Resampling.NEAREST)
+    softened_mask = edge_mask.filter(ImageFilter.GaussianBlur(radius=max(6, min(source.size) // 420)))
+    filled.paste(repaired, (0, 0), softened_mask)
+    info["applied"] = True
+    info["fill_rgb"] = color
+    return filled, info
+
+
+def _light_neutral_mask(image: Image.Image, *, threshold: int, saturation_delta: int) -> Image.Image:
+    arr = np.asarray(image.convert("RGB"), dtype=np.uint8)
+    channel_min = arr.min(axis=2)
+    channel_delta = arr.max(axis=2) - channel_min
+    mask = (channel_min >= threshold) & (channel_delta <= saturation_delta)
+    return Image.fromarray(mask.astype(np.uint8) * 255)
+
+
+def _edge_connected_mask(mask: Image.Image, *, max_edge_px: int) -> Image.Image:
+    max_edge_px = max(4, max_edge_px)
+    edge = Image.new("L", mask.size, 0)
+    draw = ImageDraw.Draw(edge)
+    draw.rectangle((0, 0, mask.width, max_edge_px), fill=255)
+    draw.rectangle((0, mask.height - max_edge_px, mask.width, mask.height), fill=255)
+    draw.rectangle((0, 0, max_edge_px, mask.height), fill=255)
+    draw.rectangle((mask.width - max_edge_px, 0, mask.width, mask.height), fill=255)
+    seed = ImageChops.multiply(mask, edge)
+    connected = seed
+    while True:
+        expanded = connected.filter(ImageFilter.MaxFilter(5))
+        expanded = ImageChops.multiply(expanded, mask)
+        if ImageChops.difference(expanded, connected).getbbox() is None:
+            return connected.filter(ImageFilter.MaxFilter(7))
+        connected = expanded
+
+
+def _dominant_non_light_color(image: Image.Image) -> tuple[int, int, int]:
+    sample_w = min(500, image.width)
+    sample_h = round(sample_w * image.height / image.width)
+    small = image.resize((sample_w, sample_h), Image.Resampling.BOX)
+    arr = np.asarray(small.convert("RGB"), dtype=np.uint8)
+    channel_min = arr.min(axis=2)
+    channel_delta = arr.max(axis=2) - channel_min
+    keep = ~((channel_min >= 204) & (channel_delta <= 42))
+    pixels = arr[keep]
+    if pixels.size == 0:
+        return (25, 28, 34)
+    brightness = pixels.astype(np.uint16).sum(axis=1)
+    chosen = pixels[np.argsort(brightness)[len(pixels) // 3]]
+    return tuple(int(value) for value in chosen)
+
+
+def _analysis_size(size: tuple[int, int], *, max_width: int) -> tuple[int, int]:
+    width, height = size
+    if width <= max_width:
+        return size
+    return max_width, round(max_width * height / width)
+
+
 def build_art_master(
     *,
     source_path: Path,
@@ -137,6 +247,7 @@ def build_art_master(
     output_path: Path,
     fit_mode: str = "cover",
     auto_trim_mockup_margin: bool = False,
+    cover_edge_leaks: bool = False,
     preview_path: Path | None = None,
     preview_max_width: int = 2400,
     watermark: str = "",
@@ -148,6 +259,9 @@ def build_art_master(
     if auto_trim_mockup_margin:
         source, margin_trim = trim_generated_mockup_margin(original)
     master = fit_image_to_canvas(source, spec["canvas_px"], mode=fit_mode)
+    edge_leak_repair: dict[str, Any] | None = None
+    if cover_edge_leaks:
+        master, edge_leak_repair = cover_light_edge_leaks(master)
 
     output_path.parent.mkdir(parents=True, exist_ok=True)
     master.save(output_path, "PNG", compress_level=1)
@@ -167,6 +281,8 @@ def build_art_master(
     }
     if margin_trim:
         result["margin_trim"] = margin_trim
+    if edge_leak_repair:
+        result["edge_leak_repair"] = edge_leak_repair
 
     if preview_path:
         save_approval_preview(
