@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from PIL import Image, ImageDraw
 
-from app.print_specs.safe_composer import PixelBox, _lockup_box_within_safe_area, find_safe_boxes
+from app.print_specs.safe_composer import PixelBox, _choose_brand_box, _lockup_box_within_safe_area, find_safe_boxes
 
 
 def test_find_safe_boxes_avoids_expanded_cut_line():
@@ -28,3 +28,17 @@ def test_lockup_box_does_not_fill_whole_safe_area():
     assert lockup.height <= round(5154 * 0.18)
     assert safe.left <= lockup.left < lockup.right <= safe.right
     assert safe.top <= lockup.top < lockup.bottom <= safe.bottom
+
+
+def test_choose_brand_box_prefers_quiet_dark_area():
+    art = Image.new("RGB", (600, 300), (20, 24, 34))
+    draw = ImageDraw.Draw(art)
+    draw.rectangle((0, 0, 300, 300), fill=(230, 190, 90))
+    boxes = [
+        PixelBox(20, 40, 280, 240),
+        PixelBox(320, 40, 580, 240),
+    ]
+
+    chosen = _choose_brand_box(boxes, art)
+
+    assert chosen.left == 320

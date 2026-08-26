@@ -47,16 +47,15 @@ def build_box_prompt(
         spec_constraints = (
             f" Use proporcao exata {die_spec.get('aspect_ratio')}:1, correspondente ao canvas tecnico "
             f"{canvas.get('width')}x{canvas.get('height')} px com sangria inclusa. "
-            f"Produza APENAS a arte retangular full-bleed que sera impressa, sem mockup, sem silhueta "
-            f"de caixa, sem fundo branco externo e sem recorte visual. "
+            f"Produza APENAS uma ilustracao retangular full-bleed que sera impressa como fundo da embalagem, "
+            f"sem mockup, sem silhueta de caixa, sem fundo branco externo e sem recorte visual. "
             f"Nao coloque a arte dentro de uma pagina, mesa, cartolina, quadro cinza ou prancha tecnica; "
             f"a propria imagem inteira deve ser a arte, preenchida ate os quatro cantos. "
             f"Nao desenhe elementos tecnicos: {must_not_draw}, molde, template, borda de corte, abas brancas, "
-            f"linhas pontilhadas, linhas azuis ou marcas de registro. "
-            f"A arte deve preencher 100% do retangulo ate a sangria; paineis e abas podem ser sugeridos por "
-            f"composicao grafica, mas nunca por linha de faca. Mantenha textos, logo, telefone, Instagram, rostos "
-            f"e qualquer elemento essencial completamente dentro dos paineis, sem cruzar linhas de corte, vinco "
-            f"ou dobra."
+            f"linhas pontilhadas, linhas azuis, marcas de registro, paineis, dobras, vincos, contorno da caixa, "
+            f"linhas douradas de painel ou simulacao de embalagem aberta. "
+            f"A arte deve preencher 100% do retangulo ate a sangria como uma imagem continua, sem areas vazias "
+            f"cinzas/brancas nas bordas e sem divisorias internas."
         )
 
     reference_constraints = ""
@@ -111,8 +110,8 @@ def build_box_prompt(
         subject = f"a marca '{brand}'"
 
     return (
-        f"Crie um design profissional de embalagem de {product} para {subject}, "
-        f"em layout planificado para impressao de caixa, mas como uma arte retangular continua full-bleed. "
+        f"Crie uma arte grafica profissional de fundo para embalagem de {product} para {subject}, "
+        f"como uma imagem retangular continua full-bleed para impressao. "
         f"Estilo: moderno, vibrante, apetitoso, alta qualidade grafica, pronto para impressao. "
         f"{critical_content_rule} "
         f"Use {tema}. Orientacao horizontal. "

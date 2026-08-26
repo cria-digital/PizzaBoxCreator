@@ -134,8 +134,8 @@ def trim_generated_mockup_margin(
 def cover_light_edge_leaks(
     image: Image.Image,
     *,
-    threshold: int = 214,
-    saturation_delta: int = 34,
+    threshold: int = 176,
+    saturation_delta: int = 64,
     max_edge_fraction: float = 0.18,
 ) -> tuple[Image.Image, dict[str, Any]]:
     """Fill bright neutral areas connected to canvas edges with nearby artwork."""
@@ -170,7 +170,7 @@ def cover_light_edge_leaks(
         "right": round(bbox[2] * sx),
         "bottom": round(bbox[3] * sy),
     }
-    if covered_fraction > 0.18:
+    if covered_fraction > 0.32:
         info["reason"] = "area clara grande demais para reparo automatico"
         return source, info
 
@@ -182,7 +182,7 @@ def cover_light_edge_leaks(
     )
     blurred = blurred_small.resize(source.size, Image.Resampling.BICUBIC)
     base = Image.new("RGB", source.size, color)
-    repaired = Image.blend(base, blurred, 0.34)
+    repaired = Image.blend(base, blurred, 0.08)
     edge_mask = edge_mask_small.resize(source.size, Image.Resampling.NEAREST)
     softened_mask = edge_mask.filter(ImageFilter.GaussianBlur(radius=max(6, min(source.size) // 420)))
     filled.paste(repaired, (0, 0), softened_mask)

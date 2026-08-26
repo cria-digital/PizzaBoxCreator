@@ -5,7 +5,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from pathlib import Path
 
-from PIL import Image, ImageChops, ImageDraw, ImageFilter, ImageFont
+from PIL import Image, ImageChops, ImageDraw, ImageFilter, ImageFont, ImageStat
 
 from app.print_specs.preflight import load_die_spec, render_die_to_bleed_box
 
@@ -107,7 +107,7 @@ def compose_safe_critical_content(
         art.save(output_path, "PNG", compress_level=1)
         return {"safe_composed": False, "reason": "nenhuma area segura encontrada", "boxes": []}
 
-    safe_box = _choose_brand_box(boxes, art.size)
+    safe_box = _choose_brand_box(boxes, art)
     brand_box = _lockup_box_within_safe_area(safe_box, art.size)
     art = _draw_brand_lockup(art, brand_box, client, edit_data)
 
@@ -200,7 +200,8 @@ def _grid_rect_to_pixels(
     )
 
 
-def _choose_brand_box(boxes: list[PixelBox], size: tuple[int, int]) -> PixelBox:
+def _choose_brand_box(boxes: list[PixelBox], art: Image.Image) -> PixelBox:
+    size = art.size
     center_x = size[0] / 2
     center_y = size[1] / 2
 
@@ -209,9 +210,20 @@ def _choose_brand_box(boxes: list[PixelBox], size: tuple[int, int]) -> PixelBox:
         by = (box.top + box.bottom) / 2
         distance = abs(bx - center_x) / size[0] + abs(by - center_y) / size[1]
         shape_bonus = min(box.width / max(1, box.height), 3.0)
-        return box.area * (1.2 - distance) * shape_bonus
+        visual_bonus = _quiet_dark_bonus(art, box)
+        return box.area * (1.2 - distance) * shape_bonus * visual_bonus
 
     return max(boxes, key=score)
+
+
+def _quiet_dark_bonus(art: Image.Image, box: PixelBox) -> float:
+    sample = art.crop((box.left, box.top, box.right, box.bottom)).resize((80, 40), Image.Resampling.BOX)
+    stat = ImageStat.Stat(sample.convert("L"))
+    mean = stat.mean[0]
+    stddev = stat.stddev[0]
+    darkness = max(0.25, 1.45 - mean / 145)
+    quietness = max(0.25, 1.35 - stddev / 55)
+    return darkness * quietness
 
 
 def _lockup_box_within_safe_area(safe_box: PixelBox, canvas_size: tuple[int, int]) -> PixelBox:

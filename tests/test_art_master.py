@@ -98,6 +98,18 @@ def test_cover_light_edge_leaks_fills_bright_corner_only():
     assert repaired.getpixel((70, 40)) == (238, 238, 240)
 
 
+def test_cover_light_edge_leaks_fills_light_gray_border():
+    image = Image.new("RGB", (160, 90), (18, 22, 33))
+    for y in range(0, 14):
+        for x in range(0, 160):
+            image.putpixel((x, y), (196, 198, 203))
+
+    repaired, info = cover_light_edge_leaks(image)
+
+    assert info["applied"] is True
+    assert repaired.getpixel((80, 4)) != (196, 198, 203)
+
+
 def test_build_art_master_can_cover_light_edge_leaks(tmp_path):
     source = tmp_path / "source.png"
     spec = tmp_path / "spec.json"
@@ -147,6 +159,7 @@ def test_build_box_prompt_accepts_die_spec_constraints():
     assert "faca" in prompt
     assert "full-bleed" in prompt
     assert "sem mockup" in prompt
+    assert "sem divisorias internas" in prompt
     assert "Como nao ha imagem de referencia" in prompt
 
 
