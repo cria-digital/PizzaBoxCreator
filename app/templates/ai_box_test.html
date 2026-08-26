@@ -1,0 +1,229 @@
+{% extends "base.html" %}
+{% block title %}Teste IA - Caixa{% endblock %}
+
+{% block styles %}
+<style>
+  .ai-box-test .form-control,
+  .ai-box-test .form-select {
+    border-color: #d8dee7;
+  }
+
+  .ai-box-test .form-control:focus,
+  .ai-box-test .form-select:focus {
+    border-color: #7c8798;
+    box-shadow: 0 0 0 3px rgba(31, 41, 55, 0.10);
+  }
+
+  .ai-box-test input[type="file"].form-control::file-selector-button {
+    background: #2f3744;
+    color: #fff;
+  }
+
+  .ai-box-test input[type="file"].form-control::file-selector-button:hover {
+    background: #1f2937;
+  }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="row g-4 ai-box-test">
+  <div class="col-xl-4">
+    <div class="card shadow-sm border-0">
+      <div class="card-body">
+        <div class="d-flex align-items-center justify-content-between mb-3">
+          <h1 class="h5 mb-0">Teste IA Caixa</h1>
+          <span class="badge {{ 'bg-success' if gemini_ok else 'bg-danger' }}">
+            Gemini
+          </span>
+        </div>
+
+        {% if error %}
+        <div class="alert alert-danger py-2">{{ error }}</div>
+        {% endif %}
+
+        <div class="small text-muted mb-3">
+          <div><strong>Spec:</strong> {{ spec_path }}</div>
+          <div><strong>Faca:</strong> {{ die_pdf_path }}</div>
+          <div class="mt-1">
+            <span class="badge {{ 'bg-success' if spec_ok else 'bg-danger' }}">spec</span>
+            <span class="badge {{ 'bg-success' if die_pdf_ok else 'bg-danger' }}">faca</span>
+          </div>
+        </div>
+
+        <form method="post" action="/teste/ia-caixa" enctype="multipart/form-data" id="aiTestForm">
+          <input type="hidden" name="job_id" id="aiJobId" value="{{ job_id }}">
+          <div class="mb-3">
+            <label class="form-label">Nome da marca</label>
+            <input class="form-control" name="brand" required
+                   value="{{ (form_values.brand if form_values is defined else 'Pizzaria Nexa') }}">
+          </div>
+          <div class="row g-2">
+            <div class="col-md-6">
+              <label class="form-label">Telefone</label>
+              <input class="form-control" name="phone"
+                     value="{{ (form_values.phone if form_values is defined else '(11) 99999-9999') }}">
+            </div>
+            <div class="col-md-6">
+              <label class="form-label">Instagram</label>
+              <input class="form-control" name="instagram"
+                     value="{{ (form_values.instagram if form_values is defined else '@pizzarianexa') }}">
+            </div>
+          </div>
+          <div class="mb-3 mt-3">
+            <label class="form-label">Frase</label>
+            <input class="form-control" name="frase"
+                   value="{{ (form_values.frase if form_values is defined else 'Sua pizza chegou!') }}">
+          </div>
+          <div class="row g-2">
+            <div class="col-md-6">
+              <label class="form-label">Produto</label>
+              <select class="form-select" name="product_type">
+                {% set product = form_values.product_type if form_values is defined else 'pizza' %}
+                <option value="pizza" {{ 'selected' if product == 'pizza' else '' }}>Pizza</option>
+                <option value="esfiha" {{ 'selected' if product == 'esfiha' else '' }}>Esfiha</option>
+              </select>
+            </div>
+            <div class="col-md-6">
+              <label class="form-label">Tema</label>
+              <select class="form-select" name="tema">
+                {% set tema = form_values.tema if form_values is defined else 'premium' %}
+                <option value="premium" {{ 'selected' if tema == 'premium' else '' }}>Premium</option>
+                <option value="tradicional" {{ 'selected' if tema == 'tradicional' else '' }}>Tradicional</option>
+              </select>
+            </div>
+          </div>
+          <div class="mb-3 mt-3">
+            <label class="form-label">Imagem do cliente</label>
+            <input class="form-control" type="file" name="reference" accept="image/png,image/jpeg,image/webp">
+          </div>
+          <button class="btn btn-new-order w-100" type="submit" id="generateBtn"
+                  {{ 'disabled' if not (gemini_ok and spec_ok and die_pdf_ok) else '' }}>
+            <i class="bi bi-stars"></i> Gerar arte de teste
+          </button>
+          <button class="btn btn-outline-danger w-100 mt-2 d-none" type="button" id="cancelBtn">
+            <i class="bi bi-stop-circle"></i> Parar execução
+          </button>
+        </form>
+      </div>
+    </div>
+  </div>
+
+  <div class="col-xl-8">
+    {% if result %}
+    <div class="d-flex align-items-center justify-content-between mb-3">
+      <div>
+        <h2 class="h5 mb-1">Resultado {{ result.job_id }}</h2>
+        <div class="text-muted small">{{ result.model }} · {{ result.source_px.width }}x{{ result.source_px.height }} -> {{ result.canvas_px.width }}x{{ result.canvas_px.height }}</div>
+        <div class="text-muted small">
+          Faca na IA: {{ 'sim' if result.technical_reference else 'nao' }} ·
+          Referencias cliente: {{ result.references | length }} ·
+          Faca na conferencia: sim
+        </div>
+      </div>
+      {% if result.pdf_url %}
+      <a class="btn btn-outline-primary" href="{{ result.pdf_url }}" target="_blank">
+        <i class="bi bi-filetype-pdf"></i> PDF CMYK
+      </a>
+      {% endif %}
+    </div>
+
+    <ul class="nav nav-tabs mb-3" role="tablist">
+      <li class="nav-item"><button class="nav-link active" data-bs-toggle="tab" data-bs-target="#previewTab" type="button">Preview</button></li>
+      <li class="nav-item"><button class="nav-link" data-bs-toggle="tab" data-bs-target="#preflightTab" type="button">Faca</button></li>
+      <li class="nav-item"><button class="nav-link" data-bs-toggle="tab" data-bs-target="#safetyTab" type="button">Segurança</button></li>
+      <li class="nav-item"><button class="nav-link" data-bs-toggle="tab" data-bs-target="#metricsTab" type="button">Tecnico</button></li>
+    </ul>
+
+    <div class="tab-content">
+      <div class="tab-pane fade show active" id="previewTab">
+        {% if result.preview_url %}
+        <img src="{{ result.preview_url }}" class="img-fluid border" alt="Preview gerado">
+        {% endif %}
+      </div>
+      <div class="tab-pane fade" id="preflightTab">
+        {% if result.preflight_url %}
+        <img src="{{ result.preflight_url }}" class="img-fluid border" alt="Faca sobreposta">
+        {% endif %}
+      </div>
+      <div class="tab-pane fade" id="safetyTab">
+        {% if result.safety_url %}
+        <img src="{{ result.safety_url }}" class="img-fluid border" alt="Zonas inseguras da faca">
+        {% endif %}
+      </div>
+      <div class="tab-pane fade" id="metricsTab">
+        <div class="row g-3">
+          <div class="col-md-6">
+            <div class="card border-0 shadow-sm"><div class="card-body">
+              <h3 class="h6">PDF</h3>
+              <div class="small">Cor: {{ result.pdf.color_mode }}</div>
+              <div class="small">Imagem: {{ result.pdf.image_color_spaces | join(', ') }}</div>
+              <div class="small">Pagina: {{ result.pdf.page_size_mm.width }} x {{ result.pdf.page_size_mm.height }} mm</div>
+              <div class="small">Corte: {{ result.pdf.trim_size_mm.width }} x {{ result.pdf.trim_size_mm.height }} mm</div>
+              <div class="small">Faca: {{ result.die_aspect_ratio }}</div>
+              <div class="small">Gemini: {{ result.aspect_ratio_requested }}</div>
+              <div class="small">Refs IA: {{ result.generation_references | length }}</div>
+              {% if result.margin_trim %}
+              <div class="small">Crop margem IA: {{ 'sim' if result.margin_trim.trimmed else 'nao' }}</div>
+              {% endif %}
+              {% if result.technical_reference_error %}
+              <div class="small text-danger">Guia faca: falhou</div>
+              {% endif %}
+            </div></div>
+          </div>
+          <div class="col-md-6">
+            <div class="card border-0 shadow-sm"><div class="card-body">
+              <h3 class="h6">TAC</h3>
+              <div class="small">Max: {{ result.tac_after.max_tac }}%</div>
+              <div class="small">Acima 280%: {{ result.tac_after.over_280_pct }}%</div>
+              <div class="small">Acima 300%: {{ result.tac_after.over_300_pct }}%</div>
+            </div></div>
+          </div>
+        </div>
+      </div>
+    </div>
+    {% else %}
+    <div class="card border-0 shadow-sm">
+      <div class="card-body text-muted">
+        <h2 class="h5 text-dark">Sem resultado ainda</h2>
+        <p class="mb-0">Preencha os dados, envie uma imagem de referência se tiver e gere uma arte para validar o fluxo.</p>
+      </div>
+    </div>
+    {% endif %}
+  </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+  const form = document.getElementById('aiTestForm');
+  const generateBtn = document.getElementById('generateBtn');
+  const cancelBtn = document.getElementById('cancelBtn');
+  const jobInput = document.getElementById('aiJobId');
+
+  form?.addEventListener('submit', () => {
+    const btn = document.getElementById('generateBtn');
+    if (btn) {
+      btn.disabled = true;
+      btn.innerHTML = '<span class="spinner-border spinner-border-sm me-2"></span>Gerando';
+    }
+    cancelBtn?.classList.remove('d-none');
+  });
+
+  cancelBtn?.addEventListener('click', async () => {
+    cancelBtn.disabled = true;
+    cancelBtn.innerHTML = '<span class="spinner-border spinner-border-sm me-2"></span>Parando';
+    const body = new URLSearchParams({ job_id: jobInput?.value || '' });
+    try {
+      await fetch('/teste/ia-caixa/cancelar', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/x-www-form-urlencoded'},
+        body,
+        keepalive: true,
+      });
+    } catch (_) {
+      cancelBtn.disabled = false;
+      cancelBtn.innerHTML = '<i class="bi bi-stop-circle"></i> Parar execução';
+    }
+  });
+</script>
+{% endblock %}

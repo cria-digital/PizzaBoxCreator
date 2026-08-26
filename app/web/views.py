@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import html
+import re
 import json
 import logging
 import shutil
@@ -13,10 +14,11 @@ import hmac
 from urllib.parse import quote
 
 from fastapi import APIRouter, Request, Form, UploadFile, File, Depends
-from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse, Response
+from fastapi.responses import FileResponse, HTMLResponse, JSONResponse, RedirectResponse, Response
 from fastapi.templating import Jinja2Templates
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
+from starlette.concurrency import run_in_threadpool
 from starlette.datastructures import UploadFile as FormUploadFile
 
 from app.ai.vision import analyze_box_photo, VisionUnavailable
@@ -37,6 +39,9 @@ from app.services.order_service import (
     generate_order_preview,
     render_sample_preview,
 )
+from app.print_specs.ai_art_pipeline import run_ai_art_pipeline
+from app.print_specs.pilot_config import pilot_die_pdf_path, pilot_spec_path
+from app.services.ai_job_control import AIJobCancelled, cancel_job, finish_job, register_job
 from app.services.whatsapp_service import send_preview_to_whatsapp
 from app.services.whatsapp_config import apply_whatsapp_config, mask_secret, merge_blank_with_existing
 from app.web.auth import (
@@ -341,6 +346,205 @@ async def order_create_submit(request: Request, db: Session = Depends(get_db)):
 
 
 _VISION_MEDIA_TYPES = {"image/jpeg", "image/png", "image/gif", "image/webp"}
+_AI_TEST_MEDIA_TYPES = {"image/jpeg", "image/png", "image/webp"}
+_AI_JOB_ID_PATTERN = re.compile(r"^ai_test_[a-f0-9]{10}$")
+
+
+def _new_ai_test_job_id() -> str:
+    return f"ai_test_{uuid.uuid4().hex[:10]}"
+
+
+def _normalize_ai_test_job_id(job_id: str | None) -> str:
+    if job_id and _AI_JOB_ID_PATTERN.match(job_id):
+        return job_id
+    return _new_ai_test_job_id()
+
+
+def _pilot_spec_path() -> Path:
+    return pilot_spec_path()
+
+
+def _pilot_die_pdf_path() -> Path:
+    return pilot_die_pdf_path()
+
+
+def _artifact_url(path: str | Path | None) -> str | None:
+    if not path:
+        return None
+    p = Path(path)
+    if p.parent == settings.art_masters_dir:
+        return f"/teste/ia-caixa/arquivo/art/{p.name}"
+    if p.parent == Path("output/pdf"):
+        return f"/teste/ia-caixa/arquivo/pdf/{p.name}"
+    if p.parent == Path("tmp/preflight"):
+        return f"/teste/ia-caixa/arquivo/preflight/{p.name}"
+    return None
+
+
+def _ai_test_view_model(result: dict | None) -> dict | None:
+    if not result:
+        return None
+    return {
+        "job_id": result.get("job_id"),
+        "model": result.get("model"),
+        "die_aspect_ratio": result.get("die_aspect_ratio"),
+        "aspect_ratio_requested": result.get("aspect_ratio_requested"),
+        "generated_url": _artifact_url(result.get("generated")),
+        "preview_url": _artifact_url(result.get("master", {}).get("approval_preview")),
+        "preflight_url": _artifact_url(result.get("preflight")),
+        "safety_url": _artifact_url(result.get("safety")),
+        "pdf_url": _artifact_url(result.get("pdf", {}).get("pdf")),
+        "metadata_url": _artifact_url(result.get("metadata")),
+        "technical_reference": result.get("technical_reference"),
+        "technical_reference_error": result.get("technical_reference_error"),
+        "references": result.get("references", []),
+        "generation_references": result.get("generation_references", []),
+        "source_px": result.get("master", {}).get("source_px"),
+        "canvas_px": result.get("master", {}).get("canvas_px"),
+        "margin_trim": result.get("master", {}).get("margin_trim"),
+        "tac_after": result.get("cmyk", {}).get("tac_after"),
+        "pdf": result.get("pdf", {}),
+    }
+
+
+@router.get("/teste/ia-caixa", response_class=HTMLResponse)
+def ai_box_test_page(request: Request):
+    if redirect := _auth(request): return redirect
+
+    spec_path = _pilot_spec_path()
+    die_pdf_path = _pilot_die_pdf_path()
+    ctx = _base_ctx(request, "ai_test")
+    ctx.update({
+        "spec_path": spec_path,
+        "die_pdf_path": die_pdf_path,
+        "spec_ok": spec_path.exists(),
+        "die_pdf_ok": die_pdf_path.exists(),
+        "gemini_ok": bool(settings.gemini_api_key),
+        "result": None,
+        "error": None,
+        "job_id": _new_ai_test_job_id(),
+    })
+    return templates.TemplateResponse(request, "ai_box_test.html", ctx)
+
+
+@router.post("/teste/ia-caixa", response_class=HTMLResponse)
+async def ai_box_test_generate(
+    request: Request,
+    brand: str = Form(...),
+    phone: str = Form(""),
+    instagram: str = Form(""),
+    frase: str = Form("Sua pizza chegou!"),
+    tema: str = Form("premium"),
+    product_type: str = Form("pizza"),
+    job_id: str = Form(""),
+    reference: UploadFile | None = File(None),
+):
+    if redirect := _auth(request): return redirect
+
+    spec_path = _pilot_spec_path()
+    die_pdf_path = _pilot_die_pdf_path()
+    job_id = _normalize_ai_test_job_id(job_id)
+    ctx = _base_ctx(request, "ai_test")
+    ctx.update({
+        "spec_path": spec_path,
+        "die_pdf_path": die_pdf_path,
+        "spec_ok": spec_path.exists(),
+        "die_pdf_ok": die_pdf_path.exists(),
+        "gemini_ok": bool(settings.gemini_api_key),
+        "result": None,
+        "error": None,
+        "job_id": _new_ai_test_job_id(),
+        "form_values": {
+            "brand": brand,
+            "phone": phone,
+            "instagram": instagram,
+            "frase": frase,
+            "tema": tema,
+            "product_type": product_type,
+        },
+    })
+
+    if not settings.gemini_api_key:
+        ctx["error"] = "GEMINI_API_KEY nao esta configurada."
+        return templates.TemplateResponse(request, "ai_box_test.html", ctx, status_code=400)
+    if not spec_path.exists():
+        ctx["error"] = f"Spec da faca nao encontrado: {spec_path}"
+        return templates.TemplateResponse(request, "ai_box_test.html", ctx, status_code=400)
+    if not die_pdf_path.exists():
+        ctx["error"] = f"PDF da faca nao encontrado: {die_pdf_path}"
+        return templates.TemplateResponse(request, "ai_box_test.html", ctx, status_code=400)
+
+    references: list[Path] = []
+    if reference and reference.filename:
+        if reference.content_type not in _AI_TEST_MEDIA_TYPES:
+            ctx["error"] = "Imagem de referencia precisa ser PNG, JPG ou WEBP."
+            return templates.TemplateResponse(request, "ai_box_test.html", ctx, status_code=400)
+        suffix = Path(reference.filename).suffix.lower()
+        dest = settings.temp_dir / "ai_pilot_refs" / f"{job_id}{suffix or '.png'}"
+        dest.parent.mkdir(parents=True, exist_ok=True)
+        dest.write_bytes(await reference.read())
+        references.append(dest)
+
+    cancel_event = register_job(job_id)
+    try:
+        pipeline_result = await run_in_threadpool(
+            run_ai_art_pipeline,
+            job_id=job_id,
+            spec_path=spec_path,
+            die_pdf_path=die_pdf_path,
+            client={"name": brand.strip(), "phone": phone.strip(), "instagram": instagram.strip()},
+            template={"product_type": product_type.strip() or "pizza"},
+            edit_data={
+                "telefone": phone.strip(),
+                "instagram": instagram.strip(),
+                "frase": frase.strip(),
+                "tema_fundo": tema,
+            },
+            reference_paths=references,
+            fit_mode="cover",
+            tac_max=300,
+            cancel_event=cancel_event,
+        )
+    except AIUnavailable as e:
+        ctx["error"] = str(e)
+        return templates.TemplateResponse(request, "ai_box_test.html", ctx, status_code=503)
+    except AIJobCancelled:
+        ctx["error"] = "Geracao cancelada."
+        return templates.TemplateResponse(request, "ai_box_test.html", ctx)
+    except Exception:
+        logger.exception("Falha no teste de geracao IA")
+        ctx["error"] = "Falha ao gerar a arte. Veja o log do servidor para o detalhe tecnico."
+        return templates.TemplateResponse(request, "ai_box_test.html", ctx, status_code=500)
+    finally:
+        finish_job(job_id)
+
+    ctx["result"] = _ai_test_view_model(pipeline_result)
+    return templates.TemplateResponse(request, "ai_box_test.html", ctx)
+
+
+@router.post("/teste/ia-caixa/cancelar")
+async def ai_box_test_cancel(request: Request, job_id: str = Form(...)):
+    if redirect := _auth(request): return redirect
+    cancelled = cancel_job(job_id)
+    return JSONResponse({"cancelled": cancelled, "job_id": job_id})
+
+
+@router.get("/teste/ia-caixa/arquivo/{kind}/{filename:path}")
+def ai_box_test_artifact(request: Request, kind: str, filename: str):
+    if redirect := _auth(request): return redirect
+    safe_name = Path(filename).name
+    roots = {
+        "art": settings.art_masters_dir,
+        "pdf": Path("output/pdf"),
+        "preflight": Path("tmp/preflight"),
+    }
+    root = roots.get(kind)
+    if root is None:
+        return Response("Tipo de arquivo invalido", status_code=404)
+    path = root / safe_name
+    if not path.exists() or not path.is_file():
+        return Response("Arquivo nao encontrado", status_code=404)
+    return FileResponse(path)
 
 
 @router.post("/pedidos/analisar-foto")

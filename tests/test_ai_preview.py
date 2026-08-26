@@ -28,7 +28,7 @@ def test_build_box_prompt_includes_order_data():
     assert "(19) 99888-7766" in prompt
     assert "@yetipizzaria" in prompt
     assert "Feito com amor" in prompt
-    assert "NAO copie" in prompt  # guard against cloning the reference brand
+    assert "Como nao ha imagem de referencia" in prompt
 
 
 def test_generate_ai_preview_saves_preview_and_advances_status(db, sample_client, sample_template,

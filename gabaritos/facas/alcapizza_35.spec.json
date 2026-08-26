@@ -1,0 +1,175 @@
+{
+  "schema_version": 1,
+  "name": "alcapizza_35",
+  "product_type": "pizza_box",
+  "source_pdf": "COD. PA 35 008 - CX. PIZZA ALCAPIZZA 35.pdf",
+  "page": 1,
+  "dpi": 300,
+  "cutline_source": "TrimBox",
+  "canvas_source": "BleedBox",
+  "trim_size_mm": {
+    "width": 816.0,
+    "height": 430.0
+  },
+  "bleed_size_mm": {
+    "width": 822.35,
+    "height": 436.35
+  },
+  "media_size_mm": {
+    "width": 847.75,
+    "height": 461.75
+  },
+  "bleed_mm": {
+    "left": 3.17,
+    "right": 3.17,
+    "bottom": 3.17,
+    "top": 3.17
+  },
+  "trim_px": {
+    "width": 9638,
+    "height": 5079
+  },
+  "canvas_px": {
+    "width": 9713,
+    "height": 5154
+  },
+  "aspect_ratio": 1.8846,
+  "prompt_constraints": {
+    "layout": "arte planificada horizontal de caixa",
+    "aspect_ratio": 1.8846,
+    "target_canvas_px": {
+      "width": 9713,
+      "height": 5154
+    },
+    "must_not_draw": [
+      "faca",
+      "linha de corte",
+      "vinco",
+      "serrilha",
+      "miras de registro"
+    ],
+    "critical_note": "Preview e arte final devem derivar do mesmo master aprovado."
+  },
+  "boxes": {
+    "MediaBox": {
+      "explicit": true,
+      "points": {
+        "left": -45.0,
+        "bottom": -45.0,
+        "right": 2358.07,
+        "top": 1263.9,
+        "width": 2403.07,
+        "height": 1308.9
+      },
+      "mm": {
+        "left": -15.88,
+        "bottom": -15.88,
+        "right": 831.88,
+        "top": 445.87,
+        "width": 847.75,
+        "height": 461.75
+      },
+      "pixels": {
+        "width": 10013,
+        "height": 5454
+      },
+      "aspect_ratio": 1.836
+    },
+    "CropBox": {
+      "explicit": true,
+      "points": {
+        "left": -45.0,
+        "bottom": -45.0,
+        "right": 2358.07,
+        "top": 1263.9,
+        "width": 2403.07,
+        "height": 1308.9
+      },
+      "mm": {
+        "left": -15.88,
+        "bottom": -15.88,
+        "right": 831.88,
+        "top": 445.87,
+        "width": 847.75,
+        "height": 461.75
+      },
+      "pixels": {
+        "width": 10013,
+        "height": 5454
+      },
+      "aspect_ratio": 1.836
+    },
+    "BleedBox": {
+      "explicit": true,
+      "points": {
+        "left": -9.0,
+        "bottom": -9.0,
+        "right": 2322.07,
+        "top": 1227.9,
+        "width": 2331.07,
+        "height": 1236.9
+      },
+      "mm": {
+        "left": -3.17,
+        "bottom": -3.17,
+        "right": 819.18,
+        "top": 433.17,
+        "width": 822.35,
+        "height": 436.35
+      },
+      "pixels": {
+        "width": 9713,
+        "height": 5154
+      },
+      "aspect_ratio": 1.8846
+    },
+    "TrimBox": {
+      "explicit": true,
+      "points": {
+        "left": 0.0,
+        "bottom": 0.0,
+        "right": 2313.07,
+        "top": 1218.9,
+        "width": 2313.07,
+        "height": 1218.9
+      },
+      "mm": {
+        "left": 0.0,
+        "bottom": 0.0,
+        "right": 816.0,
+        "top": 430.0,
+        "width": 816.0,
+        "height": 430.0
+      },
+      "pixels": {
+        "width": 9638,
+        "height": 5079
+      },
+      "aspect_ratio": 1.8977
+    },
+    "ArtBox": {
+      "explicit": true,
+      "points": {
+        "left": -45.0,
+        "bottom": -45.0,
+        "right": 2358.07,
+        "top": 1263.9,
+        "width": 2403.07,
+        "height": 1308.9
+      },
+      "mm": {
+        "left": -15.88,
+        "bottom": -15.88,
+        "right": 831.88,
+        "top": 445.87,
+        "width": 847.75,
+        "height": 461.75
+      },
+      "pixels": {
+        "width": 10013,
+        "height": 5454
+      },
+      "aspect_ratio": 1.836
+    }
+  }
+}

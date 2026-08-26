@@ -23,7 +23,6 @@ logger = logging.getLogger(__name__)
 
 ANTHROPIC_TEXT_MODEL = "claude-haiku-4-5"
 ANTHROPIC_VISION_MODEL = "claude-haiku-4-5"
-GEMINI_MODEL = "gemini-2.5-flash"  # handles both text and vision
 
 
 class AIUnavailable(RuntimeError):
@@ -86,7 +85,15 @@ def vision_completion(system: str, image_bytes: bytes, media_type: str, prompt: 
     return _gemini_vision(system, image_bytes, media_type, prompt)
 
 
-def image_generation(prompt: str, reference: tuple[bytes, str] | None = None) -> bytes:
+def image_generation(
+    prompt: str,
+    reference: tuple[bytes, str] | None = None,
+    *,
+    references: list[tuple[bytes, str]] | None = None,
+    aspect_ratio: str | None = None,
+    image_size: str | None = None,
+    mime_type: str | None = None,
+) -> bytes:
     """Generate an image from a prompt, returning raw image bytes (PNG).
 
     Only Gemini generates images here (Claude has no image output), so this needs
@@ -96,21 +103,83 @@ def image_generation(prompt: str, reference: tuple[bytes, str] | None = None) ->
     if not settings.gemini_api_key:
         raise AIUnavailable("Geracao de imagem requer GEMINI_API_KEY no .env")
     client, types = _gemini()
-    parts: list = []
+    image_refs = list(references or [])
     if reference:
-        data, media_type = reference
+        image_refs.insert(0, reference)
+
+    if hasattr(client, "interactions"):
+        return _gemini_interaction_image(
+            client,
+            prompt,
+            image_refs,
+            aspect_ratio=aspect_ratio or settings.ai_preview_aspect_ratio,
+            image_size=image_size or settings.gemini_image_size,
+            mime_type=mime_type or settings.gemini_image_mime_type,
+        )
+
+    return _gemini_generate_content_image(
+        client,
+        types,
+        prompt,
+        image_refs,
+        aspect_ratio=aspect_ratio or settings.ai_preview_aspect_ratio,
+    )
+
+
+def _gemini_interaction_image(
+    client,
+    prompt: str,
+    references: list[tuple[bytes, str]],
+    *,
+    aspect_ratio: str,
+    image_size: str,
+    mime_type: str,
+) -> bytes:
+    input_parts: list = [{"type": "text", "text": prompt}]
+    for data, media_type in references:
+        input_parts.append({
+            "type": "image",
+            "data": base64.b64encode(data).decode("ascii"),
+            "mime_type": media_type,
+        })
+
+    interaction = client.interactions.create(
+        model=settings.gemini_image_model,
+        input=input_parts,
+        response_format={
+            "type": "image",
+            "mime_type": mime_type,
+            "aspect_ratio": aspect_ratio,
+            "image_size": image_size,
+        },
+    )
+    output_image = getattr(interaction, "output_image", None)
+    data = getattr(output_image, "data", None)
+    if data:
+        return base64.b64decode(data)
+    raise AIUnavailable("A IA nao retornou imagem na Interactions API.")
+
+
+def _gemini_generate_content_image(
+    client,
+    types,
+    prompt: str,
+    references: list[tuple[bytes, str]],
+    *,
+    aspect_ratio: str,
+) -> bytes:
+    parts: list = []
+    for data, media_type in references:
         parts.append(types.Part.from_bytes(data=data, mime_type=media_type))
     parts.append(prompt)
-
     resp = client.models.generate_content(
         model=settings.gemini_image_model,
         contents=parts,
         config=types.GenerateContentConfig(
             response_modalities=["Image"],
-            image_config=types.ImageConfig(aspect_ratio=settings.ai_preview_aspect_ratio),
+            image_config=types.ImageConfig(aspect_ratio=aspect_ratio),
         ),
     )
-
     candidate = resp.candidates[0]
     for part in candidate.content.parts:
         inline = getattr(part, "inline_data", None)
@@ -203,18 +272,19 @@ def _gemini():
 
 
 def _gemini_config(types, system: str):
-    """Config compartilhada: sem 'thinking' (extracao estruturada nao precisa; economiza token)."""
+    """Shared config: keep thinking minimal so short JSON responses are not truncated."""
     return types.GenerateContentConfig(
         system_instruction=system,
         max_output_tokens=512,
-        thinking_config=types.ThinkingConfig(thinking_budget=0),
+        response_mime_type="application/json",
+        thinking_config=types.ThinkingConfig(thinking_level=settings.gemini_thinking_level),
     )
 
 
 def _gemini_text(system: str, user_text: str) -> str:
     client, types = _gemini()
     resp = client.models.generate_content(
-        model=GEMINI_MODEL,
+        model=settings.gemini_text_model,
         contents=user_text,
         config=_gemini_config(types, system),
     )
@@ -224,7 +294,7 @@ def _gemini_text(system: str, user_text: str) -> str:
 def _gemini_vision(system: str, image_bytes: bytes, media_type: str, prompt: str) -> str:
     client, types = _gemini()
     resp = client.models.generate_content(
-        model=GEMINI_MODEL,
+        model=settings.gemini_vision_model,
         contents=[types.Part.from_bytes(data=image_bytes, mime_type=media_type), prompt],
         config=_gemini_config(types, system),
     )

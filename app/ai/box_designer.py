@@ -15,7 +15,16 @@ _TEMA_DESC = {
 }
 
 
-def build_box_prompt(client: dict, template: dict, edit_data: dict) -> str:
+def build_box_prompt(
+    client: dict,
+    template: dict,
+    edit_data: dict,
+    die_spec: dict | None = None,
+    *,
+    has_die_guide: bool = False,
+    has_client_references: bool = False,
+    critical_content_by_code: bool = False,
+) -> str:
     """Compose the generation prompt from the order's real data."""
     brand = client.get("name") or "Pizzaria"
     product = template.get("product_type") or "pizza"
@@ -31,14 +40,82 @@ def build_box_prompt(client: dict, template: dict, edit_data: dict) -> str:
         contato.append(f"Instagram {instagram}")
     contato_txt = " e ".join(contato) if contato else "os contatos da marca"
 
+    spec_constraints = ""
+    if die_spec:
+        canvas = die_spec.get("canvas_px") or {}
+        must_not_draw = ", ".join(die_spec.get("prompt_constraints", {}).get("must_not_draw", []))
+        spec_constraints = (
+            f" Use proporcao exata {die_spec.get('aspect_ratio')}:1, correspondente ao canvas tecnico "
+            f"{canvas.get('width')}x{canvas.get('height')} px com sangria inclusa. "
+            f"Produza APENAS a arte retangular full-bleed que sera impressa, sem mockup, sem silhueta "
+            f"de caixa, sem fundo branco externo e sem recorte visual. "
+            f"Nao coloque a arte dentro de uma pagina, mesa, cartolina, quadro cinza ou prancha tecnica; "
+            f"a propria imagem inteira deve ser a arte, preenchida ate os quatro cantos. "
+            f"Nao desenhe elementos tecnicos: {must_not_draw}, molde, template, borda de corte, abas brancas, "
+            f"linhas pontilhadas, linhas azuis ou marcas de registro. "
+            f"A arte deve preencher 100% do retangulo ate a sangria; paineis e abas podem ser sugeridos por "
+            f"composicao grafica, mas nunca por linha de faca. Mantenha textos, logo, telefone, Instagram, rostos "
+            f"e qualquer elemento essencial completamente dentro dos paineis, sem cruzar linhas de corte, vinco "
+            f"ou dobra."
+        )
+
+    reference_constraints = ""
+    if has_die_guide:
+        reference_constraints += (
+            " A primeira imagem anexada e um GUIA TECNICO DA FACA: linhas azuis indicam cortes/vincos/limites "
+            "e faixas vermelhas indicam AREA PROIBIDA para elementos importantes. Use esse guia apenas para "
+            "posicionamento. Nao desenhe linhas azuis, faixas vermelhas, molde ou marcas tecnicas na arte final. "
+            "Logo, textos, telefone, Instagram, rostos, simbolos principais e bordas de emblemas devem ficar em "
+            "areas limpas, fora das faixas vermelhas e com folga visual."
+        )
+    if has_client_references:
+        if has_die_guide:
+            reference_constraints += (
+                " As demais imagens anexadas sao referencias do cliente."
+            )
+        else:
+            reference_constraints += " As imagens anexadas sao referencias do cliente."
+        if critical_content_by_code:
+            reference_constraints += (
+                " Use a referencia apenas para estilo visual, cores, atmosfera, produto e qualidade grafica. "
+                "Nao copie textos, nomes, logotipos, letras, marcas, telefones, arrobas ou slogans da referencia."
+            )
+        else:
+            reference_constraints += (
+                " Use a referencia do cliente como prioridade visual: preserve identidade, cores, estilo, logo "
+                "e elementos principais quando existirem. Nao invente um logo diferente se houver logo na imagem; "
+                "nao use apenas o nome da marca para criar uma marca nova."
+            )
+    if not reference_constraints:
+        reference_constraints = (
+            " Como nao ha imagem de referencia do cliente, crie a identidade visual a partir dos dados fornecidos."
+        )
+
+    critical_content_rule = ""
+    if critical_content_by_code:
+        critical_content_rule = (
+            " Nao escreva nenhum texto real e nao desenhe logo final, telefone, Instagram ou slogan. "
+            "Esses elementos serao adicionados depois por software dentro de areas seguras da faca. "
+            "Deixe areas limpas e contrastadas para receber a marca e os contatos, mas sem placeholder textual, "
+            "sem letras inventadas, sem palavras, sem logotipo e sem marca falsa. A arte gerada deve funcionar "
+            "como fundo ilustrado premium, com elementos decorativos distribuidos pelos paineis sem depender de "
+            "um personagem/logo central."
+        )
+        subject = f"uma pizzaria de {product}"
+    else:
+        critical_content_rule = (
+            f" Elementos obrigatorios: um LOGO CENTRAL grande e marcante da '{brand}'; "
+            f"fotos apetitosas de {product}; o slogan \"{frase}\"; e um bloco de contato legivel com "
+            f"{contato_txt} (use icones de WhatsApp e Instagram)."
+        )
+        subject = f"a marca '{brand}'"
+
     return (
-        f"Crie um design profissional de embalagem de {product} para a marca '{brand}', "
-        f"em layout PLANIFICADO de caixa (com abas de dobra e area de corte nas bordas). "
+        f"Crie um design profissional de embalagem de {product} para {subject}, "
+        f"em layout planificado para impressao de caixa, mas como uma arte retangular continua full-bleed. "
         f"Estilo: moderno, vibrante, apetitoso, alta qualidade grafica, pronto para impressao. "
-        f"Elementos obrigatorios: um LOGO CENTRAL grande e marcante da '{brand}'; "
-        f"fotos apetitosas de {product}; o slogan \"{frase}\"; e um bloco de contato legivel com "
-        f"{contato_txt} (use icones de WhatsApp e Instagram). "
+        f"{critical_content_rule} "
         f"Use {tema}. Orientacao horizontal. "
-        f"Se houver imagem de referencia, use-a APENAS como guia de layout e qualidade — "
-        f"NAO copie a marca, o nome nem a arte dela."
+        f"{spec_constraints} "
+        f"{reference_constraints}"
     )

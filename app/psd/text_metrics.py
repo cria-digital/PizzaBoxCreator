@@ -11,6 +11,9 @@ from PIL import ImageDraw, ImageFont
 FALLBACK_FONTS = [
     "C:/Windows/Fonts/arial.ttf",
     "C:/Windows/Fonts/segoeui.ttf",
+    "/System/Library/Fonts/Supplemental/Arial.ttf",
+    "/System/Library/Fonts/Supplemental/Arial Unicode.ttf",
+    "/System/Library/Fonts/Helvetica.ttc",
     "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf",
     "/usr/share/fonts/truetype/liberation/LiberationSans-Regular.ttf",
 ]

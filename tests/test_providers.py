@@ -7,7 +7,7 @@ from types import SimpleNamespace
 import pytest
 
 from app.ai import providers
-from app.ai.providers import AIUnavailable, active_provider, ai_configured, text_completion, vision_completion
+from app.ai.providers import AIUnavailable, active_provider, ai_configured, image_generation, text_completion, vision_completion
 
 
 @pytest.fixture
@@ -106,3 +106,33 @@ def test_vision_completion_routes_to_anthropic(keys, monkeypatch):
     monkeypatch.setattr(providers, "_anthropic_client",
                         lambda: SimpleNamespace(messages=FakeMessages()))
     assert vision_completion("sys", b"img", "image/jpeg", "prompt") == "ok claude"
+
+
+def test_image_generation_uses_interactions_api(keys, monkeypatch):
+    import base64
+
+    keys(gemini="g", provider="gemini")
+    calls = {}
+
+    class FakeInteractions:
+        def create(self, **kwargs):
+            calls.update(kwargs)
+            data = base64.b64encode(b"png-bytes").decode("ascii")
+            return SimpleNamespace(output_image=SimpleNamespace(data=data))
+
+    fake_client = SimpleNamespace(interactions=FakeInteractions())
+    fake_types = SimpleNamespace()
+    monkeypatch.setattr(providers, "_gemini", lambda: (fake_client, fake_types))
+    monkeypatch.setattr(providers.settings, "gemini_image_model", "gemini-3-pro-image")
+    monkeypatch.setattr(providers.settings, "gemini_image_size", "4K")
+    monkeypatch.setattr(providers.settings, "gemini_image_mime_type", "image/jpeg")
+    monkeypatch.setattr(providers.settings, "ai_preview_aspect_ratio", "16:9")
+
+    result = image_generation("prompt", references=[(b"ref", "image/png")])
+
+    assert result == b"png-bytes"
+    assert calls["model"] == "gemini-3-pro-image"
+    assert calls["input"][0] == {"type": "text", "text": "prompt"}
+    assert calls["input"][1]["mime_type"] == "image/png"
+    assert calls["response_format"]["image_size"] == "4K"
+    assert calls["response_format"]["mime_type"] == "image/jpeg"

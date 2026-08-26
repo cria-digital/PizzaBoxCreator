@@ -33,16 +33,20 @@ coverage.xml
 # ---- Dados gerados em runtime ----
 # Todas essas pastas sao recriadas no boot por config.ensure_dirs().
 storage/output/
+storage/art_masters/
 storage/preview/
 storage/thumbnails/
 storage/logos/
 temp/
+tmp/
+output/
 *.db
 *.db-wal
 *.db-shm
 
 # ---- Arte pesada (entregue fora do git) ----
 assets/originais/
+gabaritos/*_flat.jpg
 
 # PSD/PSB nao vao pro repo por padrao (arquivos de 20-500 MB)...
 *.psd

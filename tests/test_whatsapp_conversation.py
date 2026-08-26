@@ -211,6 +211,111 @@ def test_image_message_saves_logo_and_keeps_order_usable(db, sample_client, real
     assert updated["preview_jpg"] is not None
 
 
+def test_image_without_active_order_starts_ai_pilot(db, sample_client, fake_whatsapp):
+    from app.db import repositories as repo
+    from app.services.whatsapp_service import AI_REFERENCES_KEY, AI_WORKFLOW, AI_WORKFLOW_KEY, handle_inbound_message
+
+    value = {
+        "messages": [{
+            "from": sample_client["phone"], "id": "wamid.ai-img1", "type": "image",
+            "image": {"id": "media-ai-1", "mime_type": "image/jpeg"},
+        }],
+    }
+    handle_inbound_message(db, value)
+
+    order = repo.order_get_active_for_client(db, sample_client["id"])
+    assert order is not None
+    assert order["created_by"] == "whatsapp_ai"
+    assert order["edit_data"][AI_WORKFLOW_KEY] == AI_WORKFLOW
+    ref_path = Path(order["edit_data"][AI_REFERENCES_KEY][0])
+    assert ref_path.exists()
+    assert ref_path.read_bytes() == b"not-a-real-image-but-thats-fine-for-this-test"
+    assert any("arte IA" in m["body"] for m in fake_whatsapp)
+
+
+def test_ai_pilot_text_collects_context_without_generating(db, sample_client, fake_whatsapp):
+    from app.db import repositories as repo
+    from app.services.whatsapp_service import AI_WORKFLOW, AI_WORKFLOW_KEY, handle_inbound_message
+
+    handle_inbound_message(
+        db,
+        _text_message(sample_client["phone"], "wamid.ai-start", "criar arte ia"),
+    )
+    order = repo.order_get_active_for_client(db, sample_client["id"])
+
+    handle_inbound_message(
+        db,
+        _text_message(
+            sample_client["phone"],
+            "wamid.ai-context",
+            'nome: Pizza Norte, telefone (11) 95555-4444, instagram @pizzanorte, '
+            'frase "Pizza quente chega melhor", quero 1000 caixas',
+        ),
+    )
+
+    updated = repo.order_get(db, order["id"])
+    client = repo.client_get(db, sample_client["id"])
+    assert updated["edit_data"][AI_WORKFLOW_KEY] == AI_WORKFLOW
+    assert updated["quantidade"] == 1000
+    assert updated["edit_data"]["telefone"] == "(11) 95555-4444"
+    assert updated["edit_data"]["instagram"] == "@pizzanorte"
+    assert client["name"] == "Pizza Norte"
+    assert any("Para gerar o preview" in m["body"] for m in fake_whatsapp)
+
+
+def test_ai_pilot_generate_runs_pipeline_and_sends_preview(
+    db, sample_client, fake_whatsapp, tmp_path, monkeypatch
+):
+    from app.config import settings
+    from app.db import repositories as repo
+    from app.services import whatsapp_service
+    from app.services.whatsapp_service import AI_ARTIFACTS_KEY, handle_inbound_message
+
+    spec = tmp_path / "spec.json"
+    die = tmp_path / "faca.pdf"
+    preview = tmp_path / "preview.jpg"
+    spec.write_text("{}", encoding="utf-8")
+    die.write_bytes(b"pdf")
+    preview.write_bytes(b"jpg-preview")
+    monkeypatch.setattr(settings, "gemini_api_key", "gemini-test")
+    monkeypatch.setattr(settings, "ai_pilot_spec_path", str(spec))
+    monkeypatch.setattr(settings, "ai_pilot_die_pdf_path", str(die))
+
+    def fake_pipeline(**kwargs):
+        return {
+            "job_id": "wa-test",
+            "model": "gemini-3-pro-image",
+            "generated": str(tmp_path / "generated.png"),
+            "master": {"master": str(tmp_path / "master.png"), "approval_preview": str(preview)},
+            "preflight": str(tmp_path / "overlay.jpg"),
+            "pdf": {"pdf": str(tmp_path / "arte.pdf")},
+            "metadata": str(tmp_path / "pipeline.json"),
+        }
+
+    monkeypatch.setattr(whatsapp_service, "run_ai_art_pipeline", fake_pipeline)
+
+    handle_inbound_message(db, {
+        "messages": [{
+            "from": sample_client["phone"], "id": "wamid.ai-ref", "type": "image",
+            "image": {"id": "media-ai-ref", "mime_type": "image/jpeg"},
+        }],
+    })
+    order = repo.order_get_active_for_client(db, sample_client["id"])
+
+    handle_inbound_message(
+        db,
+        _text_message(sample_client["phone"], "wamid.ai-generate", "gerar arte"),
+    )
+
+    updated = repo.order_get(db, order["id"])
+    latest = repo.revision_get_latest(db, order["id"])
+    assert updated["status"] == "preview_sent"
+    assert updated["preview_jpg"] == str(preview)
+    assert updated["edit_data"][AI_ARTIFACTS_KEY]["job_id"] == "wa-test"
+    assert latest["preview_source"] == "ai_whatsapp"
+    assert any(m["type"] == "image" and m["bytes_len"] == len(b"jpg-preview") for m in fake_whatsapp)
+
+
 # ---------------------------------------------------------------------------
 # Idempotency and error fallback
 # ---------------------------------------------------------------------------

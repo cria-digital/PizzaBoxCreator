@@ -15,13 +15,23 @@ class Settings(BaseSettings):
     # Ollama/Llama local para tarefas de texto. Requer o servidor Ollama rodando.
     ollama_base_url: str = "http://localhost:11434"
     ollama_model: str = "llama3.2:3b"
+    # Gemini models. New API keys may not have access to older 2.5 aliases.
+    gemini_text_model: str = "gemini-3.6-flash"
+    gemini_vision_model: str = "gemini-3.6-flash"
+    gemini_thinking_level: str = "MINIMAL"
     # Geracao de imagem (preview de aprovacao do cliente). So o Gemini gera imagem aqui.
     gemini_image_model: str = "gemini-3-pro-image"
+    gemini_image_size: str = "4K"
+    gemini_image_mime_type: str = "image/jpeg"
     ai_preview_aspect_ratio: str = "16:9"
     # Imagem de referencia (opcional) usada como guia de layout de caixa planificada. Vazio = so texto.
     ai_preview_reference: str = ""
+    # Front de teste da geracao IA -> prepress. Pode ser sobrescrito no .env.
+    ai_pilot_spec_path: str = "gabaritos/facas/alcapizza_35.spec.json"
+    ai_pilot_die_pdf_path: str = ""
     templates_dir: Path = Path("gabaritos")
     output_dir: Path = Path("storage/output")
+    art_masters_dir: Path = Path("storage/art_masters")
     preview_dir: Path = Path("storage/preview")
     temp_dir: Path = Path("temp")
     database_url: str = "sqlite:///storage/pizzabox.db"
@@ -95,7 +105,7 @@ class Settings(BaseSettings):
         return self
 
     def ensure_dirs(self):
-        for d in [self.templates_dir, self.output_dir, self.preview_dir, self.temp_dir,
+        for d in [self.templates_dir, self.output_dir, self.art_masters_dir, self.preview_dir, self.temp_dir,
                   self.thumbnails_dir, self.logos_dir]:
             d.mkdir(parents=True, exist_ok=True)
 

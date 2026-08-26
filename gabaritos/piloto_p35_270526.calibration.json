@@ -1,0 +1,42 @@
+{
+  "LOGO_CLIENTE": {
+    "x": 2240,
+    "y": 5705,
+    "width": 470,
+    "height": 470
+  },
+  "TEXTO_TELEFONE": {
+    "x": 2780,
+    "y": 5770,
+    "width": 1250,
+    "height": 120,
+    "font_size": 92
+  },
+  "TEXTO_INSTAGRAM": {
+    "x": 2780,
+    "y": 5910,
+    "width": 1250,
+    "height": 100,
+    "font_size": 76
+  },
+  "LOGO_CLIENTE_2": {
+    "x": 8344,
+    "y": 5705,
+    "width": 470,
+    "height": 470
+  },
+  "TEXTO_TELEFONE_2": {
+    "x": 8884,
+    "y": 5770,
+    "width": 1250,
+    "height": 120,
+    "font_size": 92
+  },
+  "TEXTO_INSTAGRAM_2": {
+    "x": 8884,
+    "y": 5910,
+    "width": 1250,
+    "height": 100,
+    "font_size": 76
+  }
+}
