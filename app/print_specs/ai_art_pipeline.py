@@ -202,13 +202,17 @@ def run_ai_art_pipeline(
         cover_edge_leaks=True,
     )
     check_cancelled()
+    composition_edit_data = dict(edit_data)
+    if client_reference_paths and not composition_edit_data.get("logo_path"):
+        composition_edit_data["logo_path"] = str(client_reference_paths[0])
+
     composition_result = compose_safe_critical_content(
         art_path=raw_master_path,
         die_pdf_path=die_pdf_path,
         spec_path=spec_path,
         output_path=master_path,
         client=client,
-        edit_data=edit_data,
+        edit_data=composition_edit_data,
     )
     check_cancelled()
     save_approval_preview(Image.open(master_path), preview_path, max_width=2400)

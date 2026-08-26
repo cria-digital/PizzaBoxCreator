@@ -191,6 +191,7 @@ def test_build_box_prompt_can_defer_critical_content_to_code():
     )
 
     assert "Nao escreva nenhum texto real" in prompt
+    assert "qualquer bloco de informacao" in prompt
     assert "adicionados depois por software" in prompt
     assert "Yeti" not in prompt
     assert "@yeti" not in prompt

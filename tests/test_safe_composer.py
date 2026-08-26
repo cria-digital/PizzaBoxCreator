@@ -2,7 +2,13 @@ from __future__ import annotations
 
 from PIL import Image, ImageDraw
 
-from app.print_specs.safe_composer import PixelBox, _choose_brand_box, _lockup_box_within_safe_area, find_safe_boxes
+from app.print_specs.safe_composer import (
+    PixelBox,
+    _choose_brand_box,
+    _draw_brand_lockup,
+    _lockup_box_within_safe_area,
+    find_safe_boxes,
+)
 
 
 def test_find_safe_boxes_avoids_expanded_cut_line():
@@ -24,8 +30,8 @@ def test_lockup_box_does_not_fill_whole_safe_area():
 
     assert lockup.width < safe.width
     assert lockup.height < safe.height
-    assert lockup.width <= round(9713 * 0.26)
-    assert lockup.height <= round(5154 * 0.18)
+    assert lockup.width <= round(9713 * 0.32)
+    assert lockup.height <= round(5154 * 0.20)
     assert safe.left <= lockup.left < lockup.right <= safe.right
     assert safe.top <= lockup.top < lockup.bottom <= safe.bottom
 
@@ -42,3 +48,19 @@ def test_choose_brand_box_prefers_quiet_dark_area():
     chosen = _choose_brand_box(boxes, art)
 
     assert chosen.left == 320
+
+
+def test_draw_brand_lockup_places_uploaded_logo(tmp_path):
+    art = Image.new("RGB", (900, 420), (18, 22, 34))
+    logo = tmp_path / "goku.png"
+    Image.new("RGBA", (100, 100), (240, 90, 20, 255)).save(logo)
+    box = PixelBox(120, 100, 650, 300)
+
+    result = _draw_brand_lockup(
+        art,
+        box,
+        {"name": "Pizzaria Goku"},
+        {"telefone": "(11) 99999-9999", "instagram": "@goku", "frase": "Sua pizza chegou!", "logo_path": str(logo)},
+    )
+
+    assert result.getpixel((170, 155)) != (18, 22, 34)

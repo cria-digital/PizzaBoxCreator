@@ -40,7 +40,8 @@ async def lifespan(app: FastAPI):
 
     logging.info("Database: %s", settings.database_url)
     logging.info("Templates dir: %s", settings.templates_dir.resolve())
-    logging.info("API key configured: %s", bool(settings.anthropic_api_key))
+    logging.info("Anthropic API key configured: %s", bool(settings.anthropic_api_key))
+    logging.info("Gemini API key configured: %s", bool(settings.gemini_api_key))
     logging.info("WhatsApp integration enabled: %s", settings.whatsapp_enabled)
     yield
 

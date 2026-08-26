@@ -93,12 +93,13 @@ def build_box_prompt(
     critical_content_rule = ""
     if critical_content_by_code:
         critical_content_rule = (
-            " Nao escreva nenhum texto real e nao desenhe logo final, telefone, Instagram ou slogan. "
+            " Nao escreva nenhum texto real e nao desenhe logo final, telefone, Instagram, slogan, placa, faixa, "
+            "etiqueta, selo de marca ou qualquer bloco de informacao. "
             "Esses elementos serao adicionados depois por software dentro de areas seguras da faca. "
-            "Deixe areas limpas e contrastadas para receber a marca e os contatos, mas sem placeholder textual, "
-            "sem letras inventadas, sem palavras, sem logotipo e sem marca falsa. A arte gerada deve funcionar "
-            "como fundo ilustrado premium, com elementos decorativos distribuidos pelos paineis sem depender de "
-            "um personagem/logo central."
+            "Deixe algumas areas limpas e contrastadas para receber a marca e os contatos, mas sem placeholder "
+            "textual, sem letras inventadas, sem palavras, sem logotipo, sem marca falsa e sem personagem central "
+            "tratado como protagonista da embalagem. A arte gerada deve funcionar como fundo ilustrado premium, "
+            "com elementos decorativos distribuidos pelos paineis."
         )
         subject = f"uma pizzaria de {product}"
     else:

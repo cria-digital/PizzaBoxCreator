@@ -5,7 +5,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from pathlib import Path
 
-from PIL import Image, ImageChops, ImageDraw, ImageFilter, ImageFont, ImageStat
+from PIL import Image, ImageChops, ImageDraw, ImageFilter, ImageFont, ImageOps, ImageStat
 
 from app.print_specs.preflight import load_die_spec, render_die_to_bleed_box
 
@@ -99,7 +99,7 @@ def compose_safe_critical_content(
         die_pdf_path=die_pdf_path,
         spec_path=spec_path,
         target_size=analysis_size,
-        thicken=max(17, analysis_size[0] // 80),
+        thicken=max(25, analysis_size[0] // 55),
     )
     boxes = [_scale_box(box, analysis_size, art.size) for box in find_safe_boxes(mask)]
     if not boxes:
@@ -228,10 +228,15 @@ def _quiet_dark_bonus(art: Image.Image, box: PixelBox) -> float:
 
 def _lockup_box_within_safe_area(safe_box: PixelBox, canvas_size: tuple[int, int]) -> PixelBox:
     canvas_w, canvas_h = canvas_size
-    max_w = round(canvas_w * 0.26)
-    max_h = round(canvas_h * 0.18)
-    target_w = min(round(safe_box.width * 0.58), max_w)
-    target_h = min(round(safe_box.height * 0.30), max_h)
+    guard = max(28, min(canvas_w, canvas_h) // 70)
+    guarded = safe_box.inset(min(guard, max(0, safe_box.width // 6), max(0, safe_box.height // 6)))
+    if guarded.width > 0 and guarded.height > 0:
+        safe_box = guarded
+
+    max_w = round(canvas_w * 0.32)
+    max_h = round(canvas_h * 0.20)
+    target_w = min(round(safe_box.width * 0.70), max_w)
+    target_h = min(round(safe_box.height * 0.34), max_h)
 
     aspect = target_w / max(1, target_h)
     if aspect < 1.7:
@@ -253,17 +258,33 @@ def _draw_brand_lockup(art: Image.Image, box: PixelBox, client: dict, edit_data:
     phone = edit_data.get("telefone") or client.get("phone") or ""
     instagram = edit_data.get("instagram") or client.get("instagram") or ""
     contact = "  ".join(part for part in [phone, instagram] if part)
+    logo = _load_logo_mark(edit_data.get("logo_path"))
 
     base = art.convert("RGBA")
     overlay = Image.new("RGBA", base.size, (0, 0, 0, 0))
     draw = ImageDraw.Draw(overlay)
 
-    pad = max(10, min(box.width, box.height) // 14)
+    pad = max(14, min(box.width, box.height) // 11)
     content = box.inset(pad)
+    panel_radius = max(18, min(box.width, box.height) // 9)
+    draw.rounded_rectangle(
+        (box.left, box.top, box.right, box.bottom),
+        radius=panel_radius,
+        fill=(0, 0, 0, 126),
+        outline=(255, 255, 255, 34),
+        width=max(2, min(box.width, box.height) // 90),
+    )
 
-    brand_font = _fit_font(brand, content.width, max(20, content.height // 4))
-    slogan_font = _fit_font(slogan, content.width, max(14, content.height // 7))
-    contact_font = _fit_font(contact, content.width, max(12, content.height // 10)) if contact else None
+    logo_size = 0
+    logo_gap = max(18, content.width // 22)
+    if logo is not None and content.width >= content.height * 1.7:
+        logo_size = min(round(content.height * 0.78), round(content.width * 0.24))
+    text_left = content.left + logo_size + (logo_gap if logo_size else 0)
+    text_width = max(120, content.right - text_left)
+
+    brand_font = _fit_font(brand, text_width, max(24, content.height // 3))
+    slogan_font = _fit_font(slogan, text_width, max(15, content.height // 7))
+    contact_font = _fit_font(contact, text_width, max(12, content.height // 10)) if contact else None
 
     lines = [(brand, brand_font, (255, 244, 210))]
     if slogan:
@@ -275,25 +296,51 @@ def _draw_brand_lockup(art: Image.Image, box: PixelBox, client: dict, edit_data:
     gap = max(8, content.height // 18)
     total_h = sum(heights) + gap * (len(lines) - 1)
     y = content.top + max(0, (content.height - total_h) // 2)
-    shadow_pad = max(14, min(box.width, box.height) // 18)
-    draw.rounded_rectangle(
-        (
-            content.left - shadow_pad,
-            y - shadow_pad,
-            content.right + shadow_pad,
-            y + total_h + shadow_pad,
-        ),
-        radius=max(16, shadow_pad),
-        fill=(0, 0, 0, 72),
-    )
+
+    if logo is not None and logo_size:
+        mark = _prepare_logo_mark(logo, logo_size)
+        logo_y = content.top + (content.height - logo_size) // 2
+        overlay.alpha_composite(mark, (content.left, logo_y))
+
     for (text, font, fill), text_h in zip(lines, heights):
         text_w, _ = _text_size(draw, text, font)
-        x = content.left + max(0, (content.width - text_w) // 2)
+        x = text_left if logo_size else content.left + max(0, (content.width - text_w) // 2)
         stroke = max(2, font.size // 14)
         draw.text((x, y), text, font=font, fill=fill, stroke_width=stroke, stroke_fill=(0, 0, 0, 215))
         y += text_h + gap
 
     return Image.alpha_composite(base, overlay).convert("RGB")
+
+
+def _load_logo_mark(path: str | None) -> Image.Image | None:
+    if not path:
+        return None
+    try:
+        return Image.open(path).convert("RGBA")
+    except Exception:
+        return None
+
+
+def _prepare_logo_mark(logo: Image.Image, size: int) -> Image.Image:
+    image = ImageOps.contain(logo.convert("RGBA"), (size, size), method=Image.Resampling.LANCZOS)
+    mark = Image.new("RGBA", (size, size), (255, 255, 255, 255))
+    mark.alpha_composite(image, ((size - image.width) // 2, (size - image.height) // 2))
+
+    mask = Image.new("L", (size, size), 0)
+    draw = ImageDraw.Draw(mask)
+    radius = max(12, size // 9)
+    draw.rounded_rectangle((0, 0, size, size), radius=radius, fill=255)
+
+    framed = Image.new("RGBA", (size, size), (0, 0, 0, 0))
+    framed.paste(mark.convert("RGBA"), (0, 0), mask)
+    border = ImageDraw.Draw(framed)
+    border.rounded_rectangle(
+        (1, 1, size - 2, size - 2),
+        radius=radius,
+        outline=(255, 255, 255, 190),
+        width=max(2, size // 26),
+    )
+    return framed
 
 
 def _fit_font(text: str, max_width: int, max_size: int) -> ImageFont.FreeTypeFont:
