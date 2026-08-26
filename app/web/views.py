@@ -390,6 +390,7 @@ def _ai_test_view_model(result: dict | None) -> dict | None:
         "die_aspect_ratio": result.get("die_aspect_ratio"),
         "aspect_ratio_requested": result.get("aspect_ratio_requested"),
         "generated_url": _artifact_url(result.get("generated")),
+        "generated_preview_url": _artifact_url(result.get("generated_preview")),
         "preview_url": _artifact_url(result.get("master", {}).get("approval_preview")),
         "preflight_url": _artifact_url(result.get("preflight")),
         "safety_url": _artifact_url(result.get("safety")),

@@ -5,6 +5,7 @@ from __future__ import annotations
 import json
 import logging
 import threading
+from io import BytesIO
 from pathlib import Path
 from typing import Any
 
@@ -55,7 +56,26 @@ def _media_type(path: Path) -> str:
 
 
 def load_references(paths: list[Path]) -> list[tuple[bytes, str]]:
-    return [(path.read_bytes(), _media_type(path)) for path in paths]
+    return [_reference_bytes_for_generation(path) for path in paths]
+
+
+def _reference_bytes_for_generation(path: Path) -> tuple[bytes, str]:
+    data = path.read_bytes()
+    media_type = _media_type(path)
+    try:
+        image = Image.open(BytesIO(data))
+    except Exception:
+        return data, media_type
+
+    if image.mode in {"RGBA", "LA"} or ("transparency" in image.info):
+        rgba = image.convert("RGBA")
+        flattened = Image.new("RGBA", rgba.size, (255, 255, 255, 255))
+        flattened.alpha_composite(rgba)
+        out = BytesIO()
+        flattened.convert("RGB").save(out, "PNG")
+        return out.getvalue(), "image/png"
+
+    return data, media_type
 
 
 def die_aspect_ratio(spec: dict[str, Any]) -> str:
@@ -152,6 +172,7 @@ def run_ai_art_pipeline(
         critical_content_by_code=True,
     )
     generated_path = output_root / f"{job_id}_ai_generated.png"
+    generated_preview_path = output_root / f"{job_id}_ai_preview.jpg"
     raw_master_path = output_root / f"{job_id}_master_raw.png"
     master_path = output_root / f"{job_id}_master.png"
     preview_path = output_root / f"{job_id}_preview.jpg"
@@ -170,6 +191,7 @@ def run_ai_art_pipeline(
     )
     check_cancelled()
     save_generated_image(image_bytes, generated_path)
+    save_approval_preview(Image.open(generated_path), generated_preview_path, max_width=2400)
 
     master_result = build_art_master(
         source_path=generated_path,
@@ -241,6 +263,7 @@ def run_ai_art_pipeline(
         "references": [str(path) for path in client_reference_paths],
         "generation_references": [str(path) for path in generation_references],
         "generated": str(generated_path),
+        "generated_preview": str(generated_preview_path),
         "master": master_result,
         "preflight": str(preflight_path),
         "safety": str(safety_path),

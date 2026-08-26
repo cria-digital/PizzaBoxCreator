@@ -62,6 +62,20 @@ def test_load_references_reads_media_types(tmp_path):
     assert refs[1][1] == "image/jpeg"
 
 
+def test_load_references_flattens_transparent_logo_on_white(tmp_path):
+    logo = tmp_path / "logo.png"
+    image = Image.new("RGBA", (8, 8), (0, 0, 0, 0))
+    image.putpixel((4, 4), (255, 0, 0, 255))
+    image.save(logo)
+
+    data, media_type = load_references([logo])[0]
+    flattened = Image.open(io.BytesIO(data)).convert("RGB")
+
+    assert media_type == "image/png"
+    assert flattened.getpixel((0, 0)) == (255, 255, 255)
+    assert flattened.getpixel((4, 4)) == (255, 0, 0)
+
+
 def test_die_aspect_ratio_uses_exact_canvas():
     assert die_aspect_ratio({"canvas_px": {"width": 9713, "height": 5154}}) == "9713:5154"
 
@@ -151,6 +165,7 @@ def test_run_ai_art_pipeline_writes_all_outputs(tmp_path, monkeypatch):
     )
 
     assert (out / "job_teste_ai_generated.png").exists()
+    assert (out / "job_teste_ai_preview.jpg").exists()
     assert (out / "job_teste_master_raw.png").exists()
     assert (out / "job_teste_master.png").exists()
     assert (out / "job_teste_master_cmyk.tif").exists()
@@ -161,4 +176,5 @@ def test_run_ai_art_pipeline_writes_all_outputs(tmp_path, monkeypatch):
     assert result["master"]["safe_composition"]["safe_composed"] is True
     assert result["die_aspect_ratio"] == "600:300"
     assert result["aspect_ratio_requested"] == "16:9"
+    assert result["generated_preview"].endswith("_ai_preview.jpg")
     assert calls["aspect_ratio"] == "16:9"

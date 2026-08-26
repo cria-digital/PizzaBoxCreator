@@ -113,7 +113,7 @@
     <div class="d-flex align-items-center justify-content-between mb-3">
       <div>
         <h2 class="h5 mb-1">Resultado {{ result.job_id }}</h2>
-        <div class="text-muted small">{{ result.model }} · {{ result.source_px.width }}x{{ result.source_px.height }} -> {{ result.canvas_px.width }}x{{ result.canvas_px.height }}</div>
+        <div class="text-muted small">{{ result.model }} · IA {{ result.source_px.width }}x{{ result.source_px.height }} · Faca {{ result.canvas_px.width }}x{{ result.canvas_px.height }}</div>
         <div class="text-muted small">
           Faca na IA: {{ 'sim' if result.technical_reference else 'nao' }} ·
           Referencias cliente: {{ result.references | length }} ·
@@ -136,8 +136,10 @@
 
     <div class="tab-content">
       <div class="tab-pane fade show active" id="previewTab">
-        {% if result.preview_url %}
-        <img src="{{ result.preview_url }}" class="img-fluid border" alt="Preview gerado">
+        {% if result.generated_preview_url %}
+        <img src="{{ result.generated_preview_url }}" class="img-fluid border" alt="Preview bruto gerado pela IA">
+        {% elif result.generated_url %}
+        <img src="{{ result.generated_url }}" class="img-fluid border" alt="Preview bruto gerado pela IA">
         {% endif %}
       </div>
       <div class="tab-pane fade" id="preflightTab">

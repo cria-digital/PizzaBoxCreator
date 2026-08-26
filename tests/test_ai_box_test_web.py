@@ -26,6 +26,7 @@ def _fake_pipeline_result(tmp_path):
     preflight.mkdir()
     for path in [
         art / "job_preview.jpg",
+        art / "job_ai_preview.jpg",
         art / "job_generated.png",
         art / "job_pipeline.json",
         preflight / "job_overlay.jpg",
@@ -37,6 +38,7 @@ def _fake_pipeline_result(tmp_path):
         "job_id": "job",
         "model": "gemini-3-pro-image",
         "generated": str(art / "job_generated.png"),
+        "generated_preview": str(art / "job_ai_preview.jpg"),
         "metadata": str(art / "job_pipeline.json"),
         "master": {
             "approval_preview": str(art / "job_preview.jpg"),
