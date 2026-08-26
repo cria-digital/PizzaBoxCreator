@@ -1,0 +1,11 @@
+{
+  "title": "Pizza Box Creator",
+  "description": "Automate pizza box design with AI, allowing pizzerias to customize and approve artwork via WhatsApp while managing projects and files efficiently.",
+  "robots": {
+    "index": false
+  },
+  "accessibility": {
+    "addBypassLinks": false,
+    "ignoreReducedMotion": false
+  }
+}
