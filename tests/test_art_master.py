@@ -4,7 +4,7 @@ import json
 
 from PIL import Image
 
-from app.ai.box_designer import build_box_prompt
+from app.ai.box_designer import PizzaBoxTextAgent, build_box_prompt
 from app.print_specs.art_master import (
     build_art_master,
     cover_light_edge_leaks,
@@ -214,3 +214,30 @@ def test_build_box_prompt_uses_reference_as_logo_source():
     assert "Use as imagens anexadas como referencias do cliente" in prompt
     assert "Preserve a identidade visual do logo" in prompt
     assert "Nao invente um logo diferente" in prompt
+
+
+def test_pizza_box_text_agent_guides_image_agent_for_print_and_cutlines():
+    prompt = PizzaBoxTextAgent(
+        client={"name": "Borcelle", "phone": "(11) 99999-9999", "instagram": "@borcelle"},
+        template={"product_type": "pizza"},
+        edit_data={"frase": "Desde 2012", "tema_fundo": "premium"},
+        die_spec={
+            "aspect_ratio": 1.8846,
+            "canvas_px": {"width": 9713, "height": 5154},
+            "bleed_mm": {"left": 3.17, "right": 3.17, "top": 3.17, "bottom": 3.17},
+            "prompt_constraints": {"must_not_draw": ["faca", "linha de corte", "vinco"]},
+        },
+        has_client_references=True,
+        critical_content_by_code=True,
+    ).build_image_prompt()
+
+    assert "agente de texto" in prompt
+    assert "agente de imagem" in prompt
+    assert "exclusivamente arte de caixa de pizza" in prompt
+    assert "Nome: Borcelle" in prompt
+    assert "Telefone: (11) 99999-9999" in prompt
+    assert "Instagram: @borcelle" in prompt
+    assert "encaixar totalmente na faca tecnica" in prompt
+    assert "cortes, vincos, dobras" in prompt
+    assert "paleta consistente" in prompt
+    assert "impressao em papelao" in prompt
