@@ -25,6 +25,7 @@ def test_build_box_prompt_includes_order_data():
     )
     assert "Yeti Pizzaria" in prompt
     assert "esfiha" in prompt
+    assert "Produto: esfiha" in prompt
     assert "(19) 99888-7766" in prompt
     assert "@yetipizzaria" in prompt
     assert "Feito com amor" in prompt

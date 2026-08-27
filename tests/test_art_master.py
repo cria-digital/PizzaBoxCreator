@@ -158,10 +158,10 @@ def test_build_box_prompt_accepts_die_spec_constraints():
     assert "9713x5154" in prompt
     assert "faca" in prompt
     assert "full-bleed" in prompt
-    assert "sem mockup" in prompt
+    assert "mockup" in prompt
     assert "sem divisorias internas" in prompt
     assert "3% da altura" in prompt
-    assert "cores chapadas" in prompt
+    assert "Cores chapadas" in prompt
     assert "respiro" in prompt
     assert "Como nao ha imagem de referencia" in prompt
 
@@ -193,18 +193,15 @@ def test_build_box_prompt_can_defer_critical_content_to_code():
         critical_content_by_code=True,
     )
 
-    assert "Nao escreva nenhum texto real" in prompt
-    assert "qualquer bloco de informacao" in prompt
-    assert "adicionados depois por software" in prompt
-    assert "simbolo visual nao-textual" in prompt
-    assert "DADOS DA PIZZARIA PARA CONTEXTO" in prompt
-    assert "nome Yeti" in prompt
-    assert "telefone 1999" in prompt
-    assert "Instagram @yeti" in prompt
-    assert "Nao escreva nenhum texto real" in prompt
+    assert "DADOS DA PIZZARIA" in prompt
+    assert "Nome: Yeti" in prompt
+    assert "Telefone: 1999" in prompt
+    assert "Instagram: @yeti" in prompt
+    assert "Escreva o telefone e o Instagram com precisao absoluta" in prompt
+    assert "NOTA DO PIPELINE" in prompt
 
 
-def test_build_box_prompt_does_not_copy_reference_text_when_code_places_content():
+def test_build_box_prompt_uses_reference_as_logo_source():
     prompt = build_box_prompt(
         client={"name": "Yeti"},
         template={"product_type": "pizza"},
@@ -213,8 +210,7 @@ def test_build_box_prompt_does_not_copy_reference_text_when_code_places_content(
         critical_content_by_code=True,
     )
 
-    assert "Nao copie textos" in prompt
-    assert "identidade visual principal" in prompt
-    assert "personagem ou logo" in prompt
-    assert "silhueta" in prompt
-    assert "preserve identidade" not in prompt
+    assert "Use o logotipo fornecido EXATAMENTE como esta" in prompt
+    assert "Use as imagens anexadas como referencias do cliente" in prompt
+    assert "Preserve a identidade visual do logo" in prompt
+    assert "Nao invente um logo diferente" in prompt
