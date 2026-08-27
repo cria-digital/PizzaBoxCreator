@@ -3,16 +3,17 @@ import { Modal } from "./ui/Overlay";
 import { Icon } from "./ui/Icon";
 import { Badge, Button, cx } from "./ui/primitives";
 
-const steps = ["Dados da pizzaria", "Preferências visuais", "Confirmação"] as const;
+const steps = ["Dados da pizzaria", "Orientações para a IA", "Confirmação"] as const;
+
+const infoKeys = ["Endereço", "Telefone", "Rede social", "QR Code"] as const;
+const infoPlaceholder: Record<string, string> = {
+  Endereço: "Rua, número, bairro",
+  Telefone: "(00) 00000-0000",
+  "Rede social": "@pizzaria",
+  "QR Code": "https:// link do cardápio",
+};
 
 const boxSizes = ["30 cm", "35 cm", "40 cm", "Múltiplos tamanhos"];
-const moods = ["Clássica italiana", "Moderna / minimalista", "Rústica / forno a lenha", "Divertida / colorida"];
-const palettes = [
-  { label: "Tomate & manjericão", colors: ["#df4526", "#4f7a3a", "#fff6ef"] },
-  { label: "Forno & brasa", colors: ["#2a211a", "#df4526", "#e2992d"] },
-  { label: "Kraft artesanal", colors: ["#c69a6d", "#7a6a54", "#2a211a"] },
-  { label: "Moderna clean", colors: ["#1c1c1c", "#df4526", "#f4ecdc"] },
-];
 
 function Label({ children }: { children: string }) {
   return <label className="mb-1.5 block text-sm font-medium text-secondary-foreground">{children}</label>;
@@ -20,13 +21,33 @@ function Label({ children }: { children: string }) {
 const inputCls =
   "w-full rounded-2xl border border-border bg-secondary/40 px-4 py-2.5 text-sm text-foreground placeholder:text-muted-foreground focus:border-primary/50 focus:bg-card focus:outline-none focus:ring-2 focus:ring-ring/20";
 
+const isHex = (v: string) => /^#([0-9a-fA-F]{3}|[0-9a-fA-F]{6})$/.test(v);
+
 export function NewOrderModal({ open, onClose }: { open: boolean; onClose: () => void }) {
   const [step, setStep] = useState(0);
   const [size, setSize] = useState(boxSizes[1]);
-  const [mood, setMood] = useState(moods[0]);
-  const [palette, setPalette] = useState(0);
   const [name, setName] = useState("");
   const [done, setDone] = useState(false);
+
+  // AI briefing
+  const [logo, setLogo] = useState(false);
+  const [reference, setReference] = useState(false);
+  const [colors, setColors] = useState<string[]>(["#df4526"]);
+  const [context, setContext] = useState("");
+  const [mustText, setMustText] = useState("");
+  const [info, setInfo] = useState<Record<string, { on: boolean; value: string }>>({
+    Endereço: { on: true, value: "" },
+    Telefone: { on: true, value: "" },
+    "Rede social": { on: false, value: "" },
+    "QR Code": { on: false, value: "" },
+  });
+
+  const setColor = (i: number, v: string) =>
+    setColors((prev) => prev.map((c, idx) => (idx === i ? v : c)));
+  const addColor = () => setColors((prev) => [...prev, "#e2992d"]);
+  const removeColor = (i: number) => setColors((prev) => prev.filter((_, idx) => idx !== i));
+  const updateInfo = (k: string, patch: Partial<{ on: boolean; value: string }>) =>
+    setInfo((prev) => ({ ...prev, [k]: { ...prev[k], ...patch } }));
 
   function close() {
     onClose();
@@ -141,53 +162,171 @@ export function NewOrderModal({ open, onClose }: { open: boolean; onClose: () =>
 
           {step === 1 && (
             <div className="flex flex-col gap-5">
+              <p className="-mt-1 text-sm text-muted-foreground">
+                O que a IA deve incluir e respeitar ao montar a arte.
+              </p>
+
+              {/* logotipo */}
               <div>
-                <Label>Estilo visual</Label>
-                <div className="grid grid-cols-2 gap-2">
-                  {moods.map((m) => (
-                    <button
-                      key={m}
-                      onClick={() => setMood(m)}
-                      className={cx(
-                        "rounded-2xl border px-4 py-3 text-left text-sm transition-colors",
-                        mood === m
-                          ? "border-primary bg-primary/5 text-foreground"
-                          : "border-border text-secondary-foreground hover:border-primary/40",
+                <Label>Inserção de logotipo</Label>
+                <button
+                  type="button"
+                  onClick={() => setLogo((v) => !v)}
+                  className={cx(
+                    "flex w-full items-center gap-3 rounded-2xl border px-4 py-3 text-left transition-colors",
+                    logo ? "border-primary bg-primary/5" : "border-border hover:border-primary/40",
+                  )}
+                >
+                  <span className="grid size-9 shrink-0 place-items-center rounded-lg bg-secondary text-secondary-foreground">
+                    <Icon name="image" size={16} />
+                  </span>
+                  <span className="flex-1">
+                    <span className="block text-sm font-medium text-foreground">
+                      {logo ? "Logotipo anexado" : "Anexar logotipo"}
+                    </span>
+                    <span className="block text-xs text-muted-foreground">PNG ou SVG · fundo transparente</span>
+                  </span>
+                  {logo && <Icon name="check" size={16} className="text-primary" />}
+                </button>
+              </div>
+
+              {/* cores — livre com color picker + hex */}
+              <div>
+                <Label>Cores da arte</Label>
+                <div className="flex flex-col gap-2">
+                  {colors.map((c, i) => (
+                    <div key={i} className="flex items-center gap-2">
+                      <label
+                        className="relative size-10 shrink-0 overflow-hidden rounded-xl border border-border"
+                        style={{ background: isHex(c) ? c : "transparent" }}
+                      >
+                        <input
+                          type="color"
+                          value={isHex(c) ? (c.length === 4
+                            ? "#" + c.slice(1).split("").map((h) => h + h).join("")
+                            : c) : "#df4526"}
+                          onChange={(e) => setColor(i, e.target.value)}
+                          className="absolute inset-0 size-full cursor-pointer opacity-0"
+                          aria-label={`Escolher cor ${i + 1}`}
+                        />
+                      </label>
+                      <input
+                        value={c}
+                        onChange={(e) => setColor(i, e.target.value)}
+                        placeholder="#df4526"
+                        spellCheck={false}
+                        className={cx(
+                          inputCls,
+                          "flex-1 font-mono uppercase",
+                          !isHex(c) && "border-primary/60 text-primary",
+                        )}
+                      />
+                      {colors.length > 1 && (
+                        <button
+                          type="button"
+                          onClick={() => removeColor(i)}
+                          className="grid size-9 shrink-0 place-items-center rounded-full text-muted-foreground transition-colors hover:bg-primary/10 hover:text-primary"
+                          aria-label="Remover cor"
+                        >
+                          <Icon name="trash" size={16} />
+                        </button>
                       )}
-                    >
-                      {m}
-                    </button>
+                    </div>
+                  ))}
+                </div>
+                <button
+                  type="button"
+                  onClick={addColor}
+                  className="mt-2 inline-flex items-center gap-1.5 rounded-full border border-border px-3 py-1.5 text-xs font-medium text-secondary-foreground transition-colors hover:border-primary/40 hover:text-primary"
+                >
+                  <Icon name="plus" size={13} /> Adicionar cor
+                </button>
+              </div>
+
+              {/* contexto livre */}
+              <div>
+                <Label>Contexto para a IA</Label>
+                <textarea
+                  value={context}
+                  onChange={(e) => setContext(e.target.value)}
+                  rows={3}
+                  placeholder="Ex.: forno a lenha desde 1998, clima acolhedor, valorizar a borda recheada…"
+                  className={cx(inputCls, "resize-none")}
+                />
+                <p className="mt-1 text-xs text-muted-foreground">
+                  Somado ao prompt de geração da arte.
+                </p>
+              </div>
+
+              {/* referência visual */}
+              <div>
+                <Label>Referência visual</Label>
+                <button
+                  type="button"
+                  onClick={() => setReference((v) => !v)}
+                  className={cx(
+                    "flex w-full items-center gap-3 rounded-2xl border border-dashed px-4 py-3 text-left transition-colors",
+                    reference ? "border-primary bg-primary/5" : "border-border hover:border-primary/40",
+                  )}
+                >
+                  <span className="grid size-9 shrink-0 place-items-center rounded-lg bg-secondary text-secondary-foreground">
+                    <Icon name="palette" size={16} />
+                  </span>
+                  <span className="flex-1 text-sm">
+                    <span className="block font-medium text-foreground">
+                      {reference ? "Referência anexada" : "Enviar imagem de referência"}
+                    </span>
+                    <span className="block text-xs text-muted-foreground">
+                      Uma arte ou estilo que sirva de inspiração
+                    </span>
+                  </span>
+                  {reference && <Icon name="check" size={16} className="text-primary" />}
+                </button>
+              </div>
+
+              {/* informações na caixa */}
+              <div>
+                <Label>Informações impressas na caixa</Label>
+                <div className="flex flex-col gap-2">
+                  {infoKeys.map((k) => (
+                    <div key={k} className="rounded-2xl border border-border p-3">
+                      <label className="flex items-center justify-between">
+                        <span className="text-sm text-foreground">{k}</span>
+                        <span className="relative inline-flex h-6 w-11 cursor-pointer items-center rounded-full bg-muted has-[:checked]:bg-primary">
+                          <input
+                            type="checkbox"
+                            className="peer sr-only"
+                            checked={info[k].on}
+                            onChange={(e) => updateInfo(k, { on: e.target.checked })}
+                          />
+                          <span className="absolute left-0.5 size-5 rounded-full bg-card shadow transition-transform peer-checked:translate-x-5" />
+                        </span>
+                      </label>
+                      {info[k].on && (
+                        <input
+                          value={info[k].value}
+                          onChange={(e) => updateInfo(k, { value: e.target.value })}
+                          placeholder={infoPlaceholder[k]}
+                          className={cx(inputCls, "mt-2 py-2")}
+                        />
+                      )}
+                    </div>
                   ))}
                 </div>
               </div>
+
+              {/* texto obrigatório */}
               <div>
-                <Label>Paleta de cores</Label>
-                <div className="flex flex-col gap-2">
-                  {palettes.map((p, i) => (
-                    <button
-                      key={p.label}
-                      onClick={() => setPalette(i)}
-                      className={cx(
-                        "flex items-center gap-3 rounded-2xl border px-4 py-2.5 text-sm transition-colors",
-                        palette === i
-                          ? "border-primary bg-primary/5"
-                          : "border-border hover:border-primary/40",
-                      )}
-                    >
-                      <span className="flex">
-                        {p.colors.map((c) => (
-                          <span
-                            key={c}
-                            className="size-5 rounded-full ring-2 ring-card first:ml-0 [&:not(:first-child)]:-ml-1.5"
-                            style={{ background: c }}
-                          />
-                        ))}
-                      </span>
-                      <span className="text-foreground">{p.label}</span>
-                      {palette === i && <Icon name="check" size={16} className="ml-auto text-primary" />}
-                    </button>
-                  ))}
-                </div>
+                <Label>Texto obrigatório na caixa</Label>
+                <input
+                  value={mustText}
+                  onChange={(e) => setMustText(e.target.value)}
+                  placeholder="Ex.: Sabor que vem do forno"
+                  className={inputCls}
+                />
+                <p className="mt-1 text-xs text-muted-foreground">
+                  A IA nunca remove nem altera este texto.
+                </p>
               </div>
             </div>
           )}
@@ -201,14 +340,30 @@ export function NewOrderModal({ open, onClose }: { open: boolean; onClose: () =>
                 {[
                   ["Pizzaria", name || "—"],
                   ["Tamanho da caixa", size],
-                  ["Estilo visual", mood],
-                  ["Paleta", palettes[palette].label],
+                  ["Logotipo", logo ? "Anexado" : "Não"],
+                  ["Referência", reference ? "Anexada" : "Não"],
+                  ["Informações", infoKeys.filter((k) => info[k].on).join(", ") || "—"],
+                  ["Texto obrigatório", mustText || "—"],
                 ].map(([k, v]) => (
-                  <div key={k} className="flex items-center justify-between px-4 py-3 text-sm">
+                  <div key={k as string} className="flex items-center justify-between px-4 py-3 text-sm">
                     <dt className="text-muted-foreground">{k}</dt>
                     <dd className="font-medium text-foreground">{v}</dd>
                   </div>
                 ))}
+                <div className="flex items-center justify-between gap-4 px-4 py-3 text-sm">
+                  <dt className="text-muted-foreground">Cores</dt>
+                  <dd className="flex flex-wrap items-center justify-end gap-1.5">
+                    {colors.map((c, i) => (
+                      <span key={i} className="inline-flex items-center gap-1 font-mono text-xs text-foreground">
+                        <span
+                          className="size-4 rounded-full ring-1 ring-black/10"
+                          style={{ background: isHex(c) ? c : "transparent" }}
+                        />
+                        {c.toUpperCase()}
+                      </span>
+                    ))}
+                  </dd>
+                </div>
               </dl>
               <Badge tone="sauce" dot className="w-fit">
                 Preview com marca d'água será gerado pela IA
