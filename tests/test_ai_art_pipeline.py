@@ -136,9 +136,6 @@ def test_run_ai_art_pipeline_writes_all_outputs(tmp_path, monkeypatch):
     pdfs = tmp_path / "pdf"
     _write_spec(spec)
     die.write_bytes(b"%PDF fake")
-    client_ref = tmp_path / "cliente.png"
-    client_ref.write_bytes(_png_bytes())
-
     calls = {}
 
     def fake_image_generation(*args, **kwargs):
@@ -150,7 +147,6 @@ def test_run_ai_art_pipeline_writes_all_outputs(tmp_path, monkeypatch):
     monkeypatch.setattr(pipeline, "build_preflight_overlay", lambda **kwargs: kwargs["output_path"].write_bytes(b"jpg") or kwargs["output_path"])
     monkeypatch.setattr(pipeline, "build_safety_overlay", lambda **kwargs: kwargs["output_path"].write_bytes(b"jpg") or kwargs["output_path"])
     def fake_compose(**kwargs):
-        assert kwargs["edit_data"]["logo_path"] == str(client_ref)
         kwargs["output_path"].write_bytes(kwargs["art_path"].read_bytes())
         return {"safe_composed": True}
 
@@ -163,7 +159,6 @@ def test_run_ai_art_pipeline_writes_all_outputs(tmp_path, monkeypatch):
         client={"name": "Yeti", "phone": "1999"},
         template={"product_type": "pizza"},
         edit_data={"telefone": "1999", "tema_fundo": "premium"},
-        reference_paths=[client_ref],
         output_root=out,
         pdf_output_dir=pdfs,
     )

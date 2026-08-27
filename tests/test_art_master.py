@@ -207,5 +207,6 @@ def test_build_box_prompt_does_not_copy_reference_text_when_code_places_content(
     )
 
     assert "Nao copie textos" in prompt
-    assert "logotipos" in prompt
+    assert "identidade visual principal" in prompt
+    assert "personagem ou logo" in prompt
     assert "preserve identidade" not in prompt

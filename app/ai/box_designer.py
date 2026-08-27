@@ -76,8 +76,11 @@ def build_box_prompt(
             reference_constraints += " As imagens anexadas sao referencias do cliente."
         if critical_content_by_code:
             reference_constraints += (
-                " Use a referencia apenas para estilo visual, cores, atmosfera, produto e qualidade grafica. "
-                "Nao copie textos, nomes, logotipos, letras, marcas, telefones, arrobas ou slogans da referencia."
+                " Use a referencia como identidade visual principal: interprete cores, estilo, mascote, simbolo, "
+                "personagem ou logo como parte da arte. Se houver um personagem/logo na referencia, transforme-o "
+                "em um elemento grafico integrado ao fundo, com acabamento premium e bem posicionado em uma area "
+                "limpa, longe das bordas e longe de cortes/vincos. Nao copie textos, nomes, letras, telefones, "
+                "arrobas ou slogans da referencia."
             )
         else:
             reference_constraints += (
@@ -97,9 +100,8 @@ def build_box_prompt(
             "etiqueta, selo de marca ou qualquer bloco de informacao. "
             "Esses elementos serao adicionados depois por software dentro de areas seguras da faca. "
             "Deixe algumas areas limpas e contrastadas para receber a marca e os contatos, mas sem placeholder "
-            "textual, sem letras inventadas, sem palavras, sem logotipo, sem marca falsa e sem personagem central "
-            "tratado como protagonista da embalagem. A arte gerada deve funcionar como fundo ilustrado premium, "
-            "com elementos decorativos distribuidos pelos paineis."
+            "textual, sem letras inventadas, sem palavras e sem marca falsa. A arte gerada deve funcionar como "
+            "fundo ilustrado premium, com elementos decorativos distribuidos pelos paineis."
         )
         subject = f"uma pizzaria de {product}"
     else:
