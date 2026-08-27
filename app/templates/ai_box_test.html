@@ -129,6 +129,7 @@
 
     <ul class="nav nav-tabs mb-3" role="tablist">
       <li class="nav-item"><button class="nav-link active" data-bs-toggle="tab" data-bs-target="#previewTab" type="button">Preview</button></li>
+      <li class="nav-item"><button class="nav-link" data-bs-toggle="tab" data-bs-target="#rawAiTab" type="button">IA bruta</button></li>
       <li class="nav-item"><button class="nav-link" data-bs-toggle="tab" data-bs-target="#preflightTab" type="button">Faca</button></li>
       <li class="nav-item"><button class="nav-link" data-bs-toggle="tab" data-bs-target="#safetyTab" type="button">Segurança</button></li>
       <li class="nav-item"><button class="nav-link" data-bs-toggle="tab" data-bs-target="#metricsTab" type="button">Tecnico</button></li>
@@ -136,10 +137,17 @@
 
     <div class="tab-content">
       <div class="tab-pane fade show active" id="previewTab">
+        {% if result.preview_url %}
+        <img src="{{ result.preview_url }}" class="img-fluid border" alt="Preview final com dados do cliente">
+        {% elif result.generated_preview_url %}
+        <img src="{{ result.generated_preview_url }}" class="img-fluid border" alt="Preview gerado pela IA">
+        {% endif %}
+      </div>
+      <div class="tab-pane fade" id="rawAiTab">
         {% if result.generated_preview_url %}
-        <img src="{{ result.generated_preview_url }}" class="img-fluid border" alt="Preview bruto gerado pela IA">
+        <img src="{{ result.generated_preview_url }}" class="img-fluid border" alt="Imagem bruta gerada pela IA">
         {% elif result.generated_url %}
-        <img src="{{ result.generated_url }}" class="img-fluid border" alt="Preview bruto gerado pela IA">
+        <img src="{{ result.generated_url }}" class="img-fluid border" alt="Imagem bruta gerada pela IA">
         {% endif %}
       </div>
       <div class="tab-pane fade" id="preflightTab">

@@ -77,10 +77,11 @@ def build_box_prompt(
         if critical_content_by_code:
             reference_constraints += (
                 " Use a referencia como identidade visual principal: interprete cores, estilo, mascote, simbolo, "
-                "personagem ou logo como parte da arte. Se houver um personagem/logo na referencia, transforme-o "
-                "em um elemento grafico integrado ao fundo, com acabamento premium e bem posicionado em uma area "
-                "limpa, longe das bordas e longe de cortes/vincos. Nao copie textos, nomes, letras, telefones, "
-                "arrobas ou slogans da referencia."
+                "personagem ou logo como parte da arte. Preserve de forma reconhecivel o sinal visual nao-textual "
+                "do logo: silhueta, composicao, formas principais, cores e tema grafico. Se houver um simbolo "
+                "como pizza, folhas, mascote ou emblema, transforme esse simbolo em elemento visual premium "
+                "integrado ao fundo, bem posicionado em area limpa, longe das bordas e longe de cortes/vincos. "
+                "Nao copie textos, nomes, letras, telefones, arrobas ou slogans da referencia."
             )
         else:
             reference_constraints += (
@@ -96,9 +97,11 @@ def build_box_prompt(
     critical_content_rule = ""
     if critical_content_by_code:
         critical_content_rule = (
-            " Nao escreva nenhum texto real e nao desenhe logo final, telefone, Instagram, slogan, placa, faixa, "
-            "etiqueta, selo de marca ou qualquer bloco de informacao. "
+            " Nao escreva nenhum texto real, nome da marca, telefone, Instagram, slogan, placa, faixa, etiqueta, "
+            "selo de marca ou qualquer bloco de informacao. "
             "Esses elementos serao adicionados depois por software dentro de areas seguras da faca. "
+            "Pode reinterpretar o simbolo visual nao-textual do logo enviado como parte da ilustracao, mas sem "
+            "copiar letras ou palavras do arquivo de referencia. "
             "Deixe algumas areas limpas e contrastadas para receber a marca e os contatos, mas sem placeholder "
             "textual, sem letras inventadas, sem palavras e sem marca falsa. A arte gerada deve funcionar como "
             "fundo ilustrado premium, com elementos decorativos distribuidos pelos paineis."

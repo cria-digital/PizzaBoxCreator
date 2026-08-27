@@ -114,6 +114,9 @@ def test_ai_box_test_post_runs_pipeline_and_shows_links(logged_in, tmp_path, mon
     assert r.status_code == 200
     assert "Resultado job" in r.text
     assert "PDF CMYK" in r.text
+    assert "IA bruta" in r.text
+    assert "/teste/ia-caixa/arquivo/art/job_preview.jpg" in r.text
+    assert "/teste/ia-caixa/arquivo/art/job_ai_preview.jpg" in r.text
     assert "/DeviceCMYK" in r.text
 
 

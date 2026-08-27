@@ -193,6 +193,7 @@ def test_build_box_prompt_can_defer_critical_content_to_code():
     assert "Nao escreva nenhum texto real" in prompt
     assert "qualquer bloco de informacao" in prompt
     assert "adicionados depois por software" in prompt
+    assert "simbolo visual nao-textual" in prompt
     assert "Yeti" not in prompt
     assert "@yeti" not in prompt
 
@@ -209,4 +210,5 @@ def test_build_box_prompt_does_not_copy_reference_text_when_code_places_content(
     assert "Nao copie textos" in prompt
     assert "identidade visual principal" in prompt
     assert "personagem ou logo" in prompt
+    assert "silhueta" in prompt
     assert "preserve identidade" not in prompt
