@@ -76,6 +76,23 @@ def test_load_references_flattens_transparent_logo_on_white(tmp_path):
     assert flattened.getpixel((4, 4)) == (255, 0, 0)
 
 
+def test_load_references_crops_white_logo_margins(tmp_path):
+    logo = tmp_path / "logo.png"
+    image = Image.new("RGB", (400, 300), "white")
+    for x in range(150, 250):
+        for y in range(110, 190):
+            image.putpixel((x, y), (165, 48, 32))
+    image.save(logo)
+
+    data, media_type = load_references([logo])[0]
+    cropped = Image.open(io.BytesIO(data)).convert("RGB")
+
+    assert media_type == "image/png"
+    assert cropped.width < 160
+    assert cropped.height < 140
+    assert cropped.getbbox() is not None
+
+
 def test_die_aspect_ratio_uses_exact_canvas():
     assert die_aspect_ratio({"canvas_px": {"width": 9713, "height": 5154}}) == "9713:5154"
 

@@ -75,7 +75,43 @@ def _reference_bytes_for_generation(path: Path) -> tuple[bytes, str]:
         flattened.convert("RGB").save(out, "PNG")
         return out.getvalue(), "image/png"
 
+    trimmed = _trim_light_reference_margins(image)
+    if trimmed.size != image.size:
+        out = BytesIO()
+        trimmed.save(out, "PNG")
+        return out.getvalue(), "image/png"
+
     return data, media_type
+
+
+def _trim_light_reference_margins(image: Image.Image) -> Image.Image:
+    """Crop white logo margins so the image model sees the symbol, not the empty canvas."""
+    rgb = image.convert("RGB")
+    if rgb.width < 32 or rgb.height < 32:
+        return rgb
+
+    # Logo files commonly arrive as a small mark centered on a white canvas.
+    # Photos/background references usually fill the whole image, so their bbox stays unchanged.
+    mask = rgb.convert("L").point(lambda px: 255 if px < 245 else 0)
+    bbox = mask.getbbox()
+    if not bbox:
+        return rgb
+
+    left, top, right, bottom = bbox
+    crop_w = right - left
+    crop_h = bottom - top
+    if crop_w >= rgb.width * 0.92 and crop_h >= rgb.height * 0.92:
+        return rgb
+    if crop_w * crop_h < rgb.width * rgb.height * 0.015:
+        return rgb
+
+    pad = max(8, round(max(crop_w, crop_h) * 0.08))
+    return rgb.crop((
+        max(0, left - pad),
+        max(0, top - pad),
+        min(rgb.width, right + pad),
+        min(rgb.height, bottom + pad),
+    ))
 
 
 def die_aspect_ratio(spec: dict[str, Any]) -> str:
