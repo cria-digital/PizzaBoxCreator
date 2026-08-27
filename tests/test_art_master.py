@@ -241,3 +241,6 @@ def test_pizza_box_text_agent_guides_image_agent_for_print_and_cutlines():
     assert "cortes, vincos, dobras" in prompt
     assert "paleta consistente" in prompt
     assert "impressao em papelao" in prompt
+    assert "lado esquerdo da arte" in prompt
+    assert "painel esquerdo da caixa" in prompt
+    assert "sem cruzar o vinco central" in prompt
