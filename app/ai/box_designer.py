@@ -44,16 +44,25 @@ def build_box_prompt(
     if die_spec:
         canvas = die_spec.get("canvas_px") or {}
         must_not_draw = ", ".join(die_spec.get("prompt_constraints", {}).get("must_not_draw", []))
+        bleed = die_spec.get("bleed_mm") or {}
+        bleed_values = [float(v) for v in bleed.values() if isinstance(v, int | float)]
+        bleed_mm = round(max(bleed_values), 2) if bleed_values else None
+        bleed_rule = (
+            f"Deixe no minimo {bleed_mm}mm de respiro em todas as bordas para logo, texto e simbolos importantes; "
+            if bleed_mm is not None
+            else "Deixe respiro em todas as bordas para logo, texto e simbolos importantes; "
+        )
         spec_constraints = (
             f" Use proporcao exata {die_spec.get('aspect_ratio')}:1, correspondente ao canvas tecnico "
             f"{canvas.get('width')}x{canvas.get('height')} px com sangria inclusa. "
-            f"Produza APENAS uma ilustracao retangular full-bleed que sera impressa como fundo da embalagem, "
-            f"sem mockup, sem silhueta de caixa, sem fundo branco externo e sem recorte visual. "
+            f"Produza APENAS a arte plana e retangular que sera impressa na caixa de pizza, "
+            f"sem mockup 3D, sem foto de caixa pronta, sem mesa, sem cartaz e sem banner digital. "
             f"Nao coloque a arte dentro de uma pagina, mesa, cartolina, quadro cinza ou prancha tecnica; "
             f"a propria imagem inteira deve ser a arte, preenchida ate os quatro cantos. "
             f"Nao desenhe elementos tecnicos: {must_not_draw}, molde, template, borda de corte, abas brancas, "
             f"linhas pontilhadas, linhas azuis, marcas de registro, paineis, dobras, vincos, contorno da caixa, "
             f"linhas douradas de painel ou simulacao de embalagem aberta. "
+            f"{bleed_rule}"
             f"A arte deve preencher 100% do retangulo ate a sangria como uma imagem continua, sem areas vazias "
             f"cinzas/brancas nas bordas e sem divisorias internas."
         )
@@ -97,6 +106,8 @@ def build_box_prompt(
     critical_content_rule = ""
     if critical_content_by_code:
         critical_content_rule = (
+            f" DADOS DA PIZZARIA PARA CONTEXTO: nome {brand}; slogan {frase}; telefone {telefone or '(sem telefone)'}; "
+            f"Instagram {instagram or '(sem instagram)'}. "
             " Nao escreva nenhum texto real, nome da marca, telefone, Instagram, slogan, placa, faixa, etiqueta, "
             "selo de marca ou qualquer bloco de informacao. "
             "Esses elementos serao adicionados depois por software dentro de areas seguras da faca. "
@@ -111,16 +122,23 @@ def build_box_prompt(
         critical_content_rule = (
             f" Elementos obrigatorios: um LOGO CENTRAL grande e marcante da '{brand}'; "
             f"fotos apetitosas de {product}; o slogan \"{frase}\"; e um bloco de contato legivel com "
-            f"{contato_txt} (use icones de WhatsApp e Instagram)."
+            f"{contato_txt} (use icones de WhatsApp e Instagram). "
+            "Escreva telefone e Instagram com precisao absoluta, caractere por caractere."
         )
         subject = f"a marca '{brand}'"
 
     return (
-        f"Crie uma arte grafica profissional de fundo para embalagem de {product} para {subject}, "
-        f"como uma imagem retangular continua full-bleed para impressao. "
-        f"Estilo: moderno, vibrante, apetitoso, alta qualidade grafica, pronto para impressao. "
+        f"Voce e designer grafico especializado em embalagens de pizza. "
+        f"Crie uma arte grafica profissional para uma caixa de pizza de {product} para {subject}, "
+        f"como uma imagem plana retangular continua full-bleed para impressao. "
+        f"O resultado precisa parecer arte de caixa de pizza impressa, nao anuncio, flyer, card de site, banner, "
+        f"post de rede social ou mockup. "
+        f"Estilo: moderno, vibrante, apetitoso, alta qualidade grafica, pronto para impressao em papelao. "
         f"{critical_content_rule} "
         f"Use {tema}. Orientacao horizontal. "
+        f"REGRAS DE IMPRESSAO: use cores chapadas, contraste alto, formas limpas e leitura forte. "
+        f"Evite gradientes finos, sombras suaves, meios-tons sutis e detalhes pequenos demais para papelao. "
+        f"Nao crie texto menor que 3% da altura da imagem. "
         f"{spec_constraints} "
         f"{reference_constraints}"
     )

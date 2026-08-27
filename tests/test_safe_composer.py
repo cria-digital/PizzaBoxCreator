@@ -64,3 +64,17 @@ def test_draw_brand_lockup_places_uploaded_logo(tmp_path):
     )
 
     assert result.getpixel((170, 155)) != (18, 22, 34)
+
+
+def test_draw_brand_lockup_does_not_paint_black_card():
+    art = Image.new("RGB", (900, 420), (232, 210, 178))
+    box = PixelBox(120, 100, 650, 300)
+
+    result = _draw_brand_lockup(
+        art,
+        box,
+        {"name": "Pizzaria Goku"},
+        {"telefone": "(11) 99999-9999", "instagram": "@goku", "frase": "Sua pizza chegou!"},
+    )
+
+    assert result.getpixel((135, 145)) == (232, 210, 178)

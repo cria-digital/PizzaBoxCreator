@@ -266,14 +266,11 @@ def _draw_brand_lockup(art: Image.Image, box: PixelBox, client: dict, edit_data:
 
     pad = max(14, min(box.width, box.height) // 11)
     content = box.inset(pad)
-    panel_radius = max(18, min(box.width, box.height) // 9)
-    draw.rounded_rectangle(
-        (box.left, box.top, box.right, box.bottom),
-        radius=panel_radius,
-        fill=(0, 0, 0, 126),
-        outline=(255, 255, 255, 34),
-        width=max(2, min(box.width, box.height) // 90),
-    )
+    accent_w = max(3, min(box.width, box.height) // 65)
+    ornament_y_top = content.top
+    ornament_y_bottom = content.bottom
+    draw.line((content.left, ornament_y_top, content.right, ornament_y_top), fill=(255, 120, 28, 210), width=accent_w)
+    draw.line((content.left, ornament_y_bottom, content.right, ornament_y_bottom), fill=(22, 100, 60, 210), width=accent_w)
 
     logo_size = 0
     logo_gap = max(18, content.width // 22)

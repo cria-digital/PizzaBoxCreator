@@ -160,6 +160,9 @@ def test_build_box_prompt_accepts_die_spec_constraints():
     assert "full-bleed" in prompt
     assert "sem mockup" in prompt
     assert "sem divisorias internas" in prompt
+    assert "3% da altura" in prompt
+    assert "cores chapadas" in prompt
+    assert "respiro" in prompt
     assert "Como nao ha imagem de referencia" in prompt
 
 
@@ -194,8 +197,11 @@ def test_build_box_prompt_can_defer_critical_content_to_code():
     assert "qualquer bloco de informacao" in prompt
     assert "adicionados depois por software" in prompt
     assert "simbolo visual nao-textual" in prompt
-    assert "Yeti" not in prompt
-    assert "@yeti" not in prompt
+    assert "DADOS DA PIZZARIA PARA CONTEXTO" in prompt
+    assert "nome Yeti" in prompt
+    assert "telefone 1999" in prompt
+    assert "Instagram @yeti" in prompt
+    assert "Nao escreva nenhum texto real" in prompt
 
 
 def test_build_box_prompt_does_not_copy_reference_text_when_code_places_content():
