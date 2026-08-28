@@ -251,6 +251,7 @@ def build_art_master(
     preview_path: Path | None = None,
     preview_max_width: int = 2400,
     watermark: str = "",
+    canvas_px: dict[str, int] | None = None,
 ) -> dict[str, Any]:
     spec = load_die_spec(spec_path)
     original = Image.open(source_path).convert("RGB")
@@ -258,7 +259,8 @@ def build_art_master(
     margin_trim: dict[str, Any] | None = None
     if auto_trim_mockup_margin:
         source, margin_trim = trim_generated_mockup_margin(original)
-    master = fit_image_to_canvas(source, spec["canvas_px"], mode=fit_mode)
+    target_canvas = canvas_px or spec["canvas_px"]
+    master = fit_image_to_canvas(source, target_canvas, mode=fit_mode)
     edge_leak_repair: dict[str, Any] | None = None
     if cover_edge_leaks:
         master, edge_leak_repair = cover_light_edge_leaks(master)
@@ -277,7 +279,7 @@ def build_art_master(
         "dpi": spec["dpi"],
         "bleed_size_mm": spec["bleed_size_mm"],
         "trim_size_mm": spec["trim_size_mm"],
-        "aspect_ratio": spec["aspect_ratio"],
+        "aspect_ratio": round(master.width / master.height, 4),
     }
     if margin_trim:
         result["margin_trim"] = margin_trim

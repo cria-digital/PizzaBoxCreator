@@ -16,20 +16,22 @@ def _png_bytes() -> bytes:
     return buf.getvalue()
 
 
-def test_build_box_prompt_includes_order_data():
+def test_build_box_prompt_keeps_commercial_text_out_of_image_prompt():
     prompt = build_box_prompt(
         client={"name": "Yeti Pizzaria", "phone": "1999", "instagram": "@yeti"},
         template={"product_type": "esfiha"},
         edit_data={"telefone": "(19) 99888-7766", "instagram": "@yetipizzaria",
                    "frase": "Feito com amor", "tema_fundo": "premium"},
     )
-    assert "Yeti Pizzaria" in prompt
+    assert "Yeti Pizzaria" not in prompt
     assert "esfiha" in prompt
     assert "Produto: esfiha" in prompt
-    assert "(19) 99888-7766" in prompt
-    assert "@yetipizzaria" in prompt
-    assert "Feito com amor" in prompt
-    assert "Como nao ha imagem de referencia" in prompt
+    assert "(19) 99888-7766" not in prompt
+    assert "@yetipizzaria" not in prompt
+    assert "Feito com amor" not in prompt
+    assert "serao aplicados posteriormente pela aplicacao" in prompt
+    assert "nenhum telefone" in prompt
+    assert "Como nao existem referencias visuais adicionais" in prompt
 
 
 def test_generate_ai_preview_saves_preview_and_advances_status(db, sample_client, sample_template,

@@ -16,6 +16,7 @@ from app.ai.providers import image_generation
 from app.config import settings
 from app.print_specs.art_master import build_art_master, save_approval_preview
 from app.print_specs.color import convert_master_to_cmyk
+from app.print_specs.layout_template import design_canvas_px, rotate_design_to_print, rotate_print_to_design
 from app.print_specs.preflight import (
     build_die_generation_guide,
     build_preflight_overlay,
@@ -25,6 +26,7 @@ from app.print_specs.preflight import (
 from app.print_specs.production_pdf import build_cmyk_artwork_pdf, write_pdf_metadata
 from app.print_specs.safe_composer import compose_safe_critical_content
 from app.services.ai_job_control import AIJobCancelled
+from app.services.logo_service import prepare_logo
 
 logger = logging.getLogger(__name__)
 
@@ -68,11 +70,9 @@ def _reference_bytes_for_generation(path: Path) -> tuple[bytes, str]:
         return data, media_type
 
     if image.mode in {"RGBA", "LA"} or ("transparency" in image.info):
-        rgba = image.convert("RGBA")
-        flattened = Image.new("RGBA", rgba.size, (255, 255, 255, 255))
-        flattened.alpha_composite(rgba)
+        rgba = _trim_transparent_reference_margins(image.convert("RGBA"))
         out = BytesIO()
-        flattened.convert("RGB").save(out, "PNG")
+        rgba.save(out, "PNG")
         return out.getvalue(), "image/png"
 
     trimmed = _trim_light_reference_margins(image)
@@ -82,6 +82,25 @@ def _reference_bytes_for_generation(path: Path) -> tuple[bytes, str]:
         return out.getvalue(), "image/png"
 
     return data, media_type
+
+
+def _trim_transparent_reference_margins(image: Image.Image) -> Image.Image:
+    alpha = image.getchannel("A")
+    bbox = alpha.getbbox()
+    if not bbox:
+        return image
+    left, top, right, bottom = bbox
+    crop_w = right - left
+    crop_h = bottom - top
+    if crop_w >= image.width * 0.96 and crop_h >= image.height * 0.96:
+        return image
+    pad = max(4, round(max(crop_w, crop_h) * 0.06))
+    return image.crop((
+        max(0, left - pad),
+        max(0, top - pad),
+        min(image.width, right + pad),
+        min(image.height, bottom + pad),
+    ))
 
 
 def _trim_light_reference_margins(image: Image.Image) -> Image.Image:
@@ -115,7 +134,7 @@ def _trim_light_reference_margins(image: Image.Image) -> Image.Image:
 
 
 def die_aspect_ratio(spec: dict[str, Any]) -> str:
-    canvas = spec["canvas_px"]
+    canvas = design_canvas_px(spec)
     return f"{int(canvas['width'])}:{int(canvas['height'])}"
 
 
@@ -125,8 +144,37 @@ def _ratio_value(ratio: str) -> float:
 
 
 def provider_aspect_ratio_for_die(spec: dict[str, Any]) -> str:
-    exact = int(spec["canvas_px"]["width"]) / int(spec["canvas_px"]["height"])
+    canvas = design_canvas_px(spec)
+    exact = int(canvas["width"]) / int(canvas["height"])
     return min(SUPPORTED_IMAGE_ASPECT_RATIOS, key=lambda ratio: abs(_ratio_value(ratio) - exact))
+
+
+def _save_print_master_from_design(*, design_master_path: Path, spec: dict[str, Any], output_path: Path) -> Path:
+    image = Image.open(design_master_path).convert("RGB")
+    rotated = rotate_design_to_print(image, spec)
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+    rotated.save(output_path, "PNG", compress_level=1)
+    return output_path
+
+
+def _save_design_preview_from_print(*, print_preview_path: Path, spec: dict[str, Any], output_path: Path) -> Path:
+    image = Image.open(print_preview_path).convert("RGB")
+    rotated = rotate_print_to_design(image, spec)
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+    if output_path.suffix.lower() in {".jpg", ".jpeg"}:
+        rotated.save(output_path, "JPEG", quality=92)
+    else:
+        rotated.save(output_path)
+    return output_path
+
+
+def _prepared_logo_overlay_path(source_path: Path, output_root: Path, job_id: str) -> Path:
+    dest = output_root / f"{job_id}_logo_overlay.png"
+    try:
+        return prepare_logo(source_path.read_bytes(), dest)
+    except Exception:
+        logger.exception("Falha ao preparar logo para overlay; usando asset original")
+        return source_path
 
 
 def prepare_generation_references(
@@ -211,9 +259,12 @@ def run_ai_art_pipeline(
     generated_preview_path = output_root / f"{job_id}_ai_preview.jpg"
     raw_master_path = output_root / f"{job_id}_master_raw.png"
     master_path = output_root / f"{job_id}_master.png"
+    print_master_path = output_root / f"{job_id}_master_print.png"
     preview_path = output_root / f"{job_id}_preview.jpg"
     preflight_path = Path("tmp/preflight") / f"{job_id}_overlay.jpg"
+    preflight_print_path = Path("tmp/preflight") / f"{job_id}_overlay_print.jpg"
     safety_path = Path("tmp/preflight") / f"{job_id}_safety.jpg"
+    safety_print_path = Path("tmp/preflight") / f"{job_id}_safety_print.jpg"
     cmyk_path = output_root / f"{job_id}_master_cmyk.tif"
     proof_path = output_root / f"{job_id}_cmyk_proof.jpg"
     pdf_path = pdf_output_dir / f"{job_id}_arte_cmyk.pdf"
@@ -236,44 +287,67 @@ def run_ai_art_pipeline(
         fit_mode=fit_mode,
         auto_trim_mockup_margin=True,
         cover_edge_leaks=True,
+        canvas_px=design_canvas_px(spec),
     )
     check_cancelled()
+    composition_edit_data = dict(edit_data)
+    if client_reference_paths and not composition_edit_data.get("logo_path"):
+        composition_edit_data["logo_path"] = str(
+            _prepared_logo_overlay_path(client_reference_paths[0], output_root, job_id)
+        )
+
     composition_result = compose_safe_critical_content(
         art_path=raw_master_path,
         die_pdf_path=die_pdf_path,
         spec_path=spec_path,
         output_path=master_path,
         client=client,
-        edit_data=edit_data,
+        edit_data=composition_edit_data,
     )
     check_cancelled()
     save_approval_preview(Image.open(master_path), preview_path, max_width=2400)
+    _save_print_master_from_design(
+        design_master_path=master_path,
+        spec=spec,
+        output_path=print_master_path,
+    )
     master_result.update({
         "raw_master": str(raw_master_path),
         "master": str(master_path),
+        "print_master": str(print_master_path),
         "approval_preview": str(preview_path),
         "safe_composition": composition_result,
     })
     build_preflight_overlay(
-        art_path=master_path,
+        art_path=print_master_path,
         die_pdf_path=die_pdf_path,
         spec_path=spec_path,
-        output_path=preflight_path,
+        output_path=preflight_print_path,
         max_width=2400,
         fit_mode="stretch",
+    )
+    _save_design_preview_from_print(
+        print_preview_path=preflight_print_path,
+        spec=spec,
+        output_path=preflight_path,
     )
     check_cancelled()
     build_safety_overlay(
-        art_path=master_path,
+        art_path=print_master_path,
         die_pdf_path=die_pdf_path,
         spec_path=spec_path,
-        output_path=safety_path,
+        output_path=safety_print_path,
         max_width=2400,
         fit_mode="stretch",
     )
+    _save_design_preview_from_print(
+        print_preview_path=safety_print_path,
+        spec=spec,
+        output_path=safety_path,
+    )
     check_cancelled()
     cmyk_result = convert_master_to_cmyk(
-        master_path=master_path,
+        master_path=print_master_path,
         output_path=cmyk_path,
         dpi=spec["dpi"],
         tac_max=tac_max,
@@ -302,7 +376,9 @@ def run_ai_art_pipeline(
         "generated_preview": str(generated_preview_path),
         "master": master_result,
         "preflight": str(preflight_path),
+        "preflight_print": str(preflight_print_path),
         "safety": str(safety_path),
+        "safety_print": str(safety_print_path),
         "cmyk": cmyk_result,
         "pdf": pdf_result,
     }

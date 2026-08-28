@@ -42,6 +42,11 @@ def _write_spec(path):
     path.write_text(json.dumps(spec), encoding="utf-8")
 
 
+def _fake_overlay(**kwargs):
+    Image.new("RGB", (600, 300), (20, 30, 40)).save(kwargs["output_path"], "JPEG")
+    return kwargs["output_path"]
+
+
 def test_save_generated_image_normalizes_to_png(tmp_path):
     out = tmp_path / "generated.png"
 
@@ -62,18 +67,18 @@ def test_load_references_reads_media_types(tmp_path):
     assert refs[1][1] == "image/jpeg"
 
 
-def test_load_references_flattens_transparent_logo_on_white(tmp_path):
+def test_load_references_preserves_transparent_logo_alpha(tmp_path):
     logo = tmp_path / "logo.png"
     image = Image.new("RGBA", (8, 8), (0, 0, 0, 0))
     image.putpixel((4, 4), (255, 0, 0, 255))
     image.save(logo)
 
     data, media_type = load_references([logo])[0]
-    flattened = Image.open(io.BytesIO(data)).convert("RGB")
+    preserved = Image.open(io.BytesIO(data)).convert("RGBA")
 
     assert media_type == "image/png"
-    assert flattened.getpixel((0, 0)) == (255, 255, 255)
-    assert flattened.getpixel((4, 4)) == (255, 0, 0)
+    assert preserved.getpixel((0, 0))[3] == 0
+    assert preserved.getpixel((4, 4)) == (255, 0, 0, 255)
 
 
 def test_load_references_crops_white_logo_margins(tmp_path):
@@ -94,11 +99,11 @@ def test_load_references_crops_white_logo_margins(tmp_path):
 
 
 def test_die_aspect_ratio_uses_exact_canvas():
-    assert die_aspect_ratio({"canvas_px": {"width": 9713, "height": 5154}}) == "9713:5154"
+    assert die_aspect_ratio({"canvas_px": {"width": 9713, "height": 5154}}) == "5154:9713"
 
 
 def test_provider_aspect_ratio_for_die_uses_supported_nearest():
-    assert provider_aspect_ratio_for_die({"canvas_px": {"width": 9713, "height": 5154}}) == "16:9"
+    assert provider_aspect_ratio_for_die({"canvas_px": {"width": 9713, "height": 5154}}) == "9:16"
 
 
 def test_prepare_generation_references_defaults_to_client_refs_only(tmp_path):
@@ -161,9 +166,10 @@ def test_run_ai_art_pipeline_writes_all_outputs(tmp_path, monkeypatch):
 
     monkeypatch.setattr(pipeline, "image_generation", fake_image_generation)
     monkeypatch.setattr(pipeline, "prepare_generation_references", lambda **kwargs: (kwargs["client_reference_paths"], None, None))
-    monkeypatch.setattr(pipeline, "build_preflight_overlay", lambda **kwargs: kwargs["output_path"].write_bytes(b"jpg") or kwargs["output_path"])
-    monkeypatch.setattr(pipeline, "build_safety_overlay", lambda **kwargs: kwargs["output_path"].write_bytes(b"jpg") or kwargs["output_path"])
+    monkeypatch.setattr(pipeline, "build_preflight_overlay", _fake_overlay)
+    monkeypatch.setattr(pipeline, "build_safety_overlay", _fake_overlay)
     def fake_compose(**kwargs):
+        calls["compose_edit_data"] = kwargs["edit_data"]
         kwargs["output_path"].write_bytes(kwargs["art_path"].read_bytes())
         return {"safe_composed": True}
 
@@ -190,7 +196,51 @@ def test_run_ai_art_pipeline_writes_all_outputs(tmp_path, monkeypatch):
     assert (out / "job_teste_pipeline.json").exists()
     assert result["pdf"]["image_color_spaces"] == ["/DeviceCMYK"]
     assert result["master"]["safe_composition"]["safe_composed"] is True
-    assert result["die_aspect_ratio"] == "600:300"
-    assert result["aspect_ratio_requested"] == "16:9"
+    assert result["die_aspect_ratio"] == "300:600"
+    assert result["aspect_ratio_requested"] == "9:16"
     assert result["generated_preview"].endswith("_ai_preview.jpg")
-    assert calls["aspect_ratio"] == "16:9"
+    assert result["master"]["print_master"].endswith("_master_print.png")
+    assert calls["aspect_ratio"] == "9:16"
+
+
+def test_run_ai_art_pipeline_promotes_first_reference_to_logo_path(tmp_path, monkeypatch):
+    import app.print_specs.ai_art_pipeline as pipeline
+
+    spec = tmp_path / "spec.json"
+    die = tmp_path / "faca.pdf"
+    out = tmp_path / "art"
+    pdfs = tmp_path / "pdf"
+    logo = tmp_path / "logo.png"
+    _write_spec(spec)
+    die.write_bytes(b"%PDF fake")
+    logo.write_bytes(_png_bytes(size=(50, 50), color=(240, 90, 20)))
+    calls = {}
+
+    def fake_image_generation(*args, **kwargs):
+        return _png_bytes()
+
+    def fake_compose(**kwargs):
+        calls["edit_data"] = kwargs["edit_data"]
+        kwargs["output_path"].write_bytes(kwargs["art_path"].read_bytes())
+        return {"safe_composed": True}
+
+    monkeypatch.setattr(pipeline, "image_generation", fake_image_generation)
+    monkeypatch.setattr(pipeline, "prepare_generation_references", lambda **kwargs: (kwargs["client_reference_paths"], None, None))
+    monkeypatch.setattr(pipeline, "build_preflight_overlay", _fake_overlay)
+    monkeypatch.setattr(pipeline, "build_safety_overlay", _fake_overlay)
+    monkeypatch.setattr(pipeline, "compose_safe_critical_content", fake_compose)
+
+    run_ai_art_pipeline(
+        job_id="job_logo",
+        spec_path=spec,
+        die_pdf_path=die,
+        client={"name": "Yeti", "phone": "1999"},
+        template={"product_type": "pizza"},
+        edit_data={"telefone": "1999", "tema_fundo": "premium"},
+        reference_paths=[logo],
+        output_root=out,
+        pdf_output_dir=pdfs,
+    )
+
+    assert calls["edit_data"]["logo_path"].endswith("_logo_overlay.png")
+    assert Image.open(calls["edit_data"]["logo_path"]).mode == "RGBA"

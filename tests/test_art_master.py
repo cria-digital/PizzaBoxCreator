@@ -154,16 +154,19 @@ def test_build_box_prompt_accepts_die_spec_constraints():
         },
     )
 
-    assert "1.8846" in prompt
-    assert "9713x5154" in prompt
+    assert "1.8846" not in prompt
+    assert "5154x9713" not in prompt
+    assert "9713x5154" not in prompt
+    assert "x 0." not in prompt
+    assert "y 0." not in prompt
     assert "faca" in prompt
     assert "full-bleed" in prompt
     assert "mockup" in prompt
-    assert "sem divisorias internas" in prompt
-    assert "3% da altura" in prompt
-    assert "Cores chapadas" in prompt
-    assert "respiro" in prompt
-    assert "Como nao ha imagem de referencia" in prompt
+    assert "Nao gere divisorias artificiais" in prompt
+    assert "3% da altura" not in prompt
+    assert "Priorize contraste" in prompt
+    assert "sangria" in prompt
+    assert "Como nao existem referencias visuais adicionais" in prompt
 
 
 def test_build_box_prompt_prioritizes_client_reference():
@@ -181,8 +184,8 @@ def test_build_box_prompt_prioritizes_client_reference():
     )
 
     assert "primeira imagem anexada e um GUIA TECNICO" in prompt
-    assert "referencias do cliente" in prompt
-    assert "Nao invente um logo diferente" in prompt
+    assert "referencias visuais do cliente" in prompt
+    assert "Nao redesenhe o logotipo" in prompt
 
 
 def test_build_box_prompt_can_defer_critical_content_to_code():
@@ -193,15 +196,16 @@ def test_build_box_prompt_can_defer_critical_content_to_code():
         critical_content_by_code=True,
     )
 
-    assert "DADOS DA PIZZARIA" in prompt
-    assert "Nome: Yeti" in prompt
-    assert "Telefone: 1999" in prompt
-    assert "Instagram: @yeti" in prompt
-    assert "Escreva o telefone e o Instagram com precisao absoluta" in prompt
-    assert "NOTA DO PIPELINE" in prompt
+    assert "DIRECAO VISUAL DO CLIENTE" in prompt
+    assert "Nome: Yeti" not in prompt
+    assert "Telefone: 1999" not in prompt
+    assert "Instagram: @yeti" not in prompt
+    assert "nenhum telefone" in prompt
+    assert "logotipo oficial" in prompt
+    assert "PIPELINE DE COMPOSICAO" in prompt
 
 
-def test_build_box_prompt_uses_reference_as_logo_source():
+def test_build_box_prompt_uses_reference_as_style_not_generated_logo():
     prompt = build_box_prompt(
         client={"name": "Yeti"},
         template={"product_type": "pizza"},
@@ -210,10 +214,11 @@ def test_build_box_prompt_uses_reference_as_logo_source():
         critical_content_by_code=True,
     )
 
-    assert "Use o logotipo fornecido EXATAMENTE como esta" in prompt
-    assert "Use as imagens anexadas como referencias do cliente" in prompt
-    assert "Preserve a identidade visual do logo" in prompt
-    assert "Nao invente um logo diferente" in prompt
+    assert "somente linguagem visual" in prompt
+    assert "As demais imagens anexadas sao referencias visuais do cliente" in prompt
+    assert "Nao redesenhe o logotipo" in prompt
+    assert "Nao coloque a imagem de referencia inteira dentro" in prompt
+    assert "NAO escreva o nome da pizzaria" in prompt
 
 
 def test_pizza_box_text_agent_guides_image_agent_for_print_and_cutlines():
@@ -227,20 +232,22 @@ def test_pizza_box_text_agent_guides_image_agent_for_print_and_cutlines():
             "bleed_mm": {"left": 3.17, "right": 3.17, "top": 3.17, "bottom": 3.17},
             "prompt_constraints": {"must_not_draw": ["faca", "linha de corte", "vinco"]},
         },
+        has_die_guide=True,
         has_client_references=True,
         critical_content_by_code=True,
     ).build_image_prompt()
 
-    assert "agente de texto" in prompt
-    assert "agente de imagem" in prompt
-    assert "exclusivamente arte de caixa de pizza" in prompt
-    assert "Nome: Borcelle" in prompt
-    assert "Telefone: (11) 99999-9999" in prompt
-    assert "Instagram: @borcelle" in prompt
-    assert "encaixar totalmente na faca tecnica" in prompt
+    assert "DIRETOR DE ARTE" in prompt
+    assert "DESIGNER GRAFICO SENIOR" in prompt
+    assert "Crie exclusivamente a ARTE VISUAL PLANIFICADA" in prompt
+    assert "Nome: Borcelle" not in prompt
+    assert "Telefone: (11) 99999-9999" not in prompt
+    assert "Instagram: @borcelle" not in prompt
+    assert "Observe cortes, vincos, dobras" in prompt
     assert "cortes, vincos, dobras" in prompt
-    assert "paleta consistente" in prompt
+    assert "paleta coerente" in prompt
     assert "impressao em papelao" in prompt
-    assert "lado esquerdo da arte" in prompt
-    assert "painel esquerdo da caixa" in prompt
-    assert "sem cruzar o vinco central" in prompt
+    assert "Zona fixa do logo" not in prompt
+    assert "Zona fixa de contato" not in prompt
+    assert "coordenada" in prompt
+    assert "nenhum valor X ou Y" in prompt
