@@ -10,16 +10,11 @@ import {
   SectionTitle,
   cx,
 } from "../components/ui/primitives";
-import { ORDERS, WEEK, stageTone } from "../data";
+import { WEEK, stageTone, type Client, type Order } from "../data";
+import { useAppStore } from "../store/AppStore";
 
 /* ---------- stat cards ---------- */
 type Stat = { label: string; value: string; delta: string; icon: IconName; highlight?: boolean };
-const stats: Stat[] = [
-  { label: "Projetos ativos", value: "38", delta: "+6 esta semana", icon: "box", highlight: true },
-  { label: "Aguardando aprovação", value: "7", delta: "3 com ajuste pedido", icon: "clock" },
-  { label: "Aprovados hoje", value: "12", delta: "+4 vs. ontem", icon: "check" },
-  { label: "Armazenamento PSD", value: "68%", delta: "142 GB de 210 GB", icon: "database" },
-];
 
 function StatCard({ s }: { s: Stat }) {
   return (
@@ -110,20 +105,21 @@ function ThroughputChart() {
 }
 
 /* ---------- next-up reminder ---------- */
-function NextUp() {
+function NextUp({ order }: { order?: Order }) {
   return (
     <Card className="flex flex-col">
       <SectionTitle>Próxima ação</SectionTitle>
-      <Badge tone="cheese" className="w-fit">
-        Ajuste solicitado
+      <Badge tone={order ? stageTone[order.stage] : "neutral"} className="w-fit">
+        {order?.stage ?? "Sem fila"}
       </Badge>
       <h4 className="mt-4 font-display text-2xl font-semibold leading-snug text-foreground">
-        Cantina do Zé pediu
+        {order?.pizzaria ?? "Nenhum pedido"}
         <br />
-        cores mais quentes
+        {order ? "aguarda avanço" : "aguardando entrada"}
       </h4>
       <p className="mt-2 flex items-center gap-2 text-sm text-muted-foreground">
-        <Icon name="chat" size={16} /> via WhatsApp · há 40 min · 4ª revisão
+        <Icon name="chat" size={16} /> via WhatsApp · {order?.updatedAt ?? "sem atualização"} ·{" "}
+        {order?.revisions ?? 0}ª revisão
       </p>
       <div className="mt-auto pt-6">
         <Button variant="dark" className="w-full">
@@ -135,7 +131,7 @@ function NextUp() {
 }
 
 /* ---------- live queue ---------- */
-function Queue() {
+function Queue({ orders }: { orders: Order[] }) {
   return (
     <Card>
       <SectionTitle
@@ -148,7 +144,7 @@ function Queue() {
         Fila de pedidos
       </SectionTitle>
       <ul className="flex flex-col gap-1">
-        {ORDERS.slice(0, 5).map((o) => (
+        {orders.slice(0, 5).map((o) => (
           <li
             key={o.id}
             className="group flex items-center gap-3 rounded-2xl px-2 py-2.5 transition-colors hover:bg-secondary/60"
@@ -171,13 +167,23 @@ function Queue() {
 }
 
 /* ---------- CRM classification ---------- */
-const crm = [
-  { label: "VIP", value: 18, tone: "bg-accent" },
-  { label: "Recorrente", value: 44, tone: "bg-[#4f7a3a]" },
-  { label: "Primeiro pedido", value: 22, tone: "bg-primary" },
-  { label: "Reativado", value: 16, tone: "bg-[#b8532f]" },
-];
-function CrmMix() {
+const crmTones: Record<string, string> = {
+  VIP: "bg-accent",
+  Recorrente: "bg-[#4f7a3a]",
+  "Primeiro pedido": "bg-primary",
+  Reativado: "bg-[#b8532f]",
+};
+function CrmMix({ clients }: { clients: Client[] }) {
+  const total = clients.length || 1;
+  const crm = ["VIP", "Recorrente", "Primeiro pedido", "Reativado"].map((label) => {
+    const count = clients.filter((client) => client.klass === label).length;
+    return {
+      label,
+      value: Math.round((count / total) * 100),
+      tone: crmTones[label],
+    };
+  });
+
   return (
     <Card>
       <SectionTitle>Carteira de clientes</SectionTitle>
@@ -200,19 +206,26 @@ function CrmMix() {
 }
 
 /* ---------- approval gauge ---------- */
-function ApprovalRate() {
+function ApprovalRate({ orders }: { orders: Order[] }) {
+  const approved = orders.filter((order) => order.stage === "Aprovado" || order.stage === "Impressão").length;
+  const rate = orders.length ? Math.round((approved / orders.length) * 100) : 0;
+  const revisions =
+    orders.length
+      ? (orders.reduce((total, order) => total + order.revisions, 0) / orders.length).toFixed(1)
+      : "0.0";
+
   return (
     <Card className="flex flex-col items-center">
       <SectionTitle>Taxa de aprovação</SectionTitle>
-      <Gauge value={82} label="previews aprovados no 1º envio" />
+      <Gauge value={rate} label="pedidos aprovados ou enviados à impressão" />
       <div className="mt-4 flex w-full justify-around border-t border-border pt-4 text-center">
         <div>
-          <div className="font-display text-xl font-semibold text-foreground">2.1</div>
+          <div className="font-display text-xl font-semibold text-foreground">{revisions}</div>
           <div className="text-xs text-muted-foreground">revisões / arte</div>
         </div>
         <div>
-          <div className="font-display text-xl font-semibold text-foreground">3h20</div>
-          <div className="text-xs text-muted-foreground">tempo médio</div>
+          <div className="font-display text-xl font-semibold text-foreground">{approved}</div>
+          <div className="text-xs text-muted-foreground">aprovados</div>
         </div>
       </div>
     </Card>
@@ -243,7 +256,40 @@ function DiskTracker() {
 }
 
 export function Dashboard() {
+  const { orders, clients } = useAppStore();
   const [newOrderOpen, setNewOrderOpen] = useState(false);
+  const activeOrders = orders.filter((order) => order.stage !== "Impressão");
+  const waitingApproval = orders.filter((order) => order.stage === "Preview enviado" || order.stage === "Ajustes");
+  const approved = orders.filter((order) => order.stage === "Aprovado");
+  const nextOrder = orders.find((order) => order.stage === "Ajustes") ?? waitingApproval[0] ?? activeOrders[0];
+  const stats: Stat[] = [
+    {
+      label: "Projetos ativos",
+      value: String(activeOrders.length),
+      delta: `${orders.length} pedidos cadastrados`,
+      icon: "box",
+      highlight: true,
+    },
+    {
+      label: "Aguardando aprovação",
+      value: String(waitingApproval.length),
+      delta: `${orders.filter((order) => order.stage === "Ajustes").length} com ajuste pedido`,
+      icon: "clock",
+    },
+    {
+      label: "Aprovados",
+      value: String(approved.length),
+      delta: `${orders.filter((order) => order.stage === "Impressão").length} em impressão`,
+      icon: "check",
+    },
+    {
+      label: "Clientes no CRM",
+      value: String(clients.length),
+      delta: `${clients.filter((client) => client.klass === "Primeiro pedido").length} primeiro pedido`,
+      icon: "database",
+    },
+  ];
+
   return (
     <>
       <NewOrderModal open={newOrderOpen} onClose={() => setNewOrderOpen(false)} />
@@ -272,16 +318,16 @@ export function Dashboard() {
         <div className="xl:col-span-2">
           <ThroughputChart />
         </div>
-        <NextUp />
+        <NextUp order={nextOrder} />
       </div>
 
       <div className="mt-5 grid grid-cols-1 gap-5 lg:grid-cols-2 xl:grid-cols-4">
         <div className="xl:col-span-2">
-          <Queue />
+          <Queue orders={orders} />
         </div>
-        <ApprovalRate />
+        <ApprovalRate orders={orders} />
         <div className="flex flex-col gap-5">
-          <CrmMix />
+          <CrmMix clients={clients} />
         </div>
       </div>
 

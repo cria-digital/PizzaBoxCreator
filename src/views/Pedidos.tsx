@@ -4,9 +4,16 @@ import { NewOrderModal } from "../components/NewOrderModal";
 import { FiltersDrawer } from "../components/FiltersDrawer";
 import { Icon } from "../components/ui/Icon";
 import { Badge, Button, cx } from "../components/ui/primitives";
-import { LAYERS, ORDERS, STAGES, stageTone, type Order } from "../data";
+import { LAYERS, STAGES, stageTone, type Order, type Stage } from "../data";
+import { useAppStore } from "../store/AppStore";
 
-function OrderCard({ o }: { o: Order }) {
+function OrderCard({
+  o,
+  onStageChange,
+}: {
+  o: Order;
+  onStageChange: (orderId: string, stage: Stage) => void;
+}) {
   return (
     <article className="group cursor-pointer rounded-2xl border border-border/70 bg-card p-4 shadow-[0_10px_30px_-28px_rgba(42,33,26,0.6)] transition-all hover:-translate-y-0.5 hover:border-primary/40">
       <div className="flex items-center justify-between">
@@ -27,13 +34,25 @@ function OrderCard({ o }: { o: Order }) {
       </div>
       <div className="mt-3 flex items-center justify-between border-t border-border/60 pt-3">
         <span className="text-[11px] text-muted-foreground">{o.updatedAt}</span>
-        <Icon name="chat" size={14} className="text-[#4ade80]" />
+        <select
+          value={o.stage}
+          onChange={(event) => onStageChange(o.id, event.target.value as Stage)}
+          className="max-w-[136px] rounded-full border border-border bg-secondary/40 px-2 py-1 text-[11px] text-secondary-foreground outline-none transition-colors hover:border-primary/40"
+          aria-label={`Etapa do pedido ${o.id}`}
+        >
+          {STAGES.map((stage) => (
+            <option key={stage} value={stage}>
+              {stage}
+            </option>
+          ))}
+        </select>
       </div>
     </article>
   );
 }
 
 export function Pedidos() {
+  const { orders, updateOrderStage } = useAppStore();
   const [filtersOpen, setFiltersOpen] = useState(false);
   const [newOrderOpen, setNewOrderOpen] = useState(false);
   return (
@@ -57,7 +76,7 @@ export function Pedidos() {
 
       <div className="-mx-1 flex gap-4 overflow-x-auto px-1 pb-4">
         {STAGES.map((stage) => {
-          const items = ORDERS.filter((o) => o.stage === stage);
+          const items = orders.filter((o) => o.stage === stage);
           return (
             <section key={stage} className="flex w-[264px] shrink-0 flex-col gap-3">
               <header className="flex items-center justify-between px-1">
@@ -70,7 +89,7 @@ export function Pedidos() {
               </header>
               <div className="flex flex-col gap-3">
                 {items.map((o) => (
-                  <OrderCard key={o.id} o={o} />
+                  <OrderCard key={o.id} o={o} onStageChange={updateOrderStage} />
                 ))}
                 {items.length === 0 && (
                   <div className="rounded-2xl border border-dashed border-border py-8 text-center text-xs text-muted-foreground">

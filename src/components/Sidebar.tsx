@@ -1,6 +1,7 @@
 import { BrandLogo } from "./BrandLogo";
 import { Icon, type IconName } from "./ui/Icon";
 import { cx } from "./ui/primitives";
+import { useAppStore } from "../store/AppStore";
 
 export type ViewId =
   | "painel"
@@ -11,7 +12,7 @@ export type ViewId =
 
 const primary: { id: ViewId; label: string; icon: IconName; badge?: string }[] = [
   { id: "painel", label: "Painel", icon: "grid" },
-  { id: "pedidos", label: "Pedidos", icon: "box", badge: "7" },
+  { id: "pedidos", label: "Pedidos", icon: "box" },
   { id: "clientes", label: "Clientes & CRM", icon: "users" },
   { id: "arquivos", label: "Arquivos PSD", icon: "layers" },
   { id: "preimpressao", label: "Pré-impressão", icon: "printer" },
@@ -36,6 +37,9 @@ export function Sidebar({
   open: boolean;
   onNavigate: () => void;
 }) {
+  const { orders } = useAppStore();
+  const openOrders = orders.filter((order) => order.stage !== "Impressão").length;
+
   return (
     <aside
       className={cx(
@@ -52,6 +56,7 @@ export function Sidebar({
           </p>
           <ul className="flex flex-col gap-1">
             {primary.map((item) => {
+              const badge = item.id === "pedidos" ? String(openOrders) : item.badge;
               const active = view === item.id;
               return (
                 <li key={item.id}>
@@ -72,9 +77,9 @@ export function Sidebar({
                     )}
                     <Icon name={item.icon} size={19} />
                     <span className="flex-1 text-left">{item.label}</span>
-                    {item.badge && (
+                    {badge && (
                       <span className="rounded-full bg-primary px-1.5 py-0.5 text-[10px] font-semibold text-primary-foreground">
-                        {item.badge}
+                        {badge}
                       </span>
                     )}
                   </button>

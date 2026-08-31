@@ -7,6 +7,7 @@ import { Clientes } from "./views/Clientes";
 import { Arquivos } from "./views/Arquivos";
 import { PreImpressao } from "./views/PreImpressao";
 import { Login } from "./views/Login";
+import { AppStoreProvider, useAppStore } from "./store/AppStore";
 
 const views: Record<ViewId, () => ReactElement> = {
   painel: Dashboard,
@@ -16,14 +17,14 @@ const views: Record<ViewId, () => ReactElement> = {
   preimpressao: PreImpressao,
 };
 
-export default function App() {
-  const [authed, setAuthed] = useState(false);
+function AppShell() {
+  const { user, logout } = useAppStore();
   const [view, setView] = useState<ViewId>("painel");
   const [menuOpen, setMenuOpen] = useState(false);
   const Current = views[view];
 
-  if (!authed) {
-    return <Login onSuccess={() => setAuthed(true)} />;
+  if (!user) {
+    return <Login />;
   }
 
   return (
@@ -44,7 +45,7 @@ export default function App() {
       )}
 
       <div className="flex min-w-0 flex-1 flex-col">
-        <Topbar onMenu={() => setMenuOpen(true)} onLogout={() => setAuthed(false)} />
+        <Topbar onMenu={() => setMenuOpen(true)} onLogout={logout} />
         <main key={view} className="flex-1 animate-[fade_.4s_ease] px-5 py-7 sm:px-8">
           <div className="mx-auto max-w-[1400px]">
             <Current />
@@ -54,5 +55,13 @@ export default function App() {
 
       <style>{`@keyframes fade{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:none}}`}</style>
     </div>
+  );
+}
+
+export default function App() {
+  return (
+    <AppStoreProvider>
+      <AppShell />
+    </AppStoreProvider>
   );
 }

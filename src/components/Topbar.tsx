@@ -1,7 +1,10 @@
 import { Icon } from "./ui/Icon";
 import { Avatar } from "./ui/primitives";
+import { useAppStore } from "../store/AppStore";
 
 export function Topbar({ onMenu, onLogout }: { onMenu: () => void; onLogout?: () => void }) {
+  const { user } = useAppStore();
+
   return (
     <header className="sticky top-0 z-30 flex items-center gap-3 border-b border-border/60 bg-background/80 px-5 py-4 backdrop-blur-md sm:gap-4 sm:px-8">
       <button
@@ -41,10 +44,10 @@ export function Topbar({ onMenu, onLogout }: { onMenu: () => void; onLogout?: ()
           <span className="absolute right-2.5 top-2.5 size-2 rounded-full bg-primary ring-2 ring-card" />
         </button>
         <div className="ml-1 flex items-center gap-3 rounded-full border border-border bg-card py-1 pl-1 pr-4">
-          <Avatar name="Marina Costa" size={36} />
+          <Avatar name={user?.name ?? "Usuário"} size={36} />
           <div className="hidden leading-tight sm:block">
-            <div className="text-sm font-semibold text-foreground">Marina Costa</div>
-            <div className="text-xs text-muted-foreground">Designer · Gráfica</div>
+            <div className="text-sm font-semibold text-foreground">{user?.name ?? "Usuário"}</div>
+            <div className="text-xs text-muted-foreground">{user?.role ?? "Equipe"} · Gráfica</div>
           </div>
         </div>
         <button

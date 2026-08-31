@@ -2,6 +2,8 @@ import { useState } from "react";
 import { Modal } from "./ui/Overlay";
 import { Icon } from "./ui/Icon";
 import { Badge, Button, cx } from "./ui/primitives";
+import { useAppStore, type NewOrderInput } from "../store/AppStore";
+import type { Order } from "../data";
 
 const steps = ["Dados da pizzaria", "Orientações para a IA", "Confirmação"] as const;
 
@@ -24,10 +26,15 @@ const inputCls =
 const isHex = (v: string) => /^#([0-9a-fA-F]{3}|[0-9a-fA-F]{6})$/.test(v);
 
 export function NewOrderModal({ open, onClose }: { open: boolean; onClose: () => void }) {
+  const { createOrder } = useAppStore();
   const [step, setStep] = useState(0);
   const [size, setSize] = useState(boxSizes[1]);
   const [name, setName] = useState("");
+  const [phone, setPhone] = useState("");
+  const [city, setCity] = useState("");
+  const [contact, setContact] = useState("");
   const [done, setDone] = useState(false);
+  const [createdOrder, setCreatedOrder] = useState<Order | null>(null);
 
   // AI briefing
   const [logo, setLogo] = useState(false);
@@ -56,7 +63,35 @@ export function NewOrderModal({ open, onClose }: { open: boolean; onClose: () =>
       setStep(0);
       setDone(false);
       setName("");
+      setPhone("");
+      setCity("");
+      setContact("");
+      setCreatedOrder(null);
     }, 250);
+  }
+
+  function submitOrder() {
+    const activeInfo = Object.fromEntries(
+      infoKeys.map((key) => [key, info[key].on ? info[key].value : ""]),
+    ) as Record<(typeof infoKeys)[number], string>;
+
+    const input: NewOrderInput = {
+      pizzaria: name || "Nova pizzaria",
+      city,
+      phone: phone || activeInfo.Telefone,
+      contact,
+      boxSize: size,
+      instagram: activeInfo["Rede social"],
+      requiredText: mustText,
+      colors,
+      context,
+      hasLogo: logo,
+      hasReference: reference,
+    };
+
+    const order = createOrder(input);
+    setCreatedOrder(order);
+    setDone(true);
   }
 
   const footer = done ? (
@@ -73,7 +108,7 @@ export function NewOrderModal({ open, onClose }: { open: boolean; onClose: () =>
           Continuar <Icon name="chevronRight" size={16} />
         </Button>
       ) : (
-        <Button onClick={() => setDone(true)}>
+        <Button onClick={submitOrder}>
           <Icon name="chat" size={16} /> Criar e abrir no WhatsApp
         </Button>
       )}
@@ -100,7 +135,9 @@ export function NewOrderModal({ open, onClose }: { open: boolean; onClose: () =>
             Um atendimento automático foi disparado no WhatsApp para coletar logo, endereço e sabores.
             O pedido entra na etapa <strong className="text-foreground">Coleta de dados</strong>.
           </p>
-          <div className="mt-4 font-mono text-xs text-muted-foreground">PBX-2419</div>
+          <div className="mt-4 font-mono text-xs text-muted-foreground">
+            {createdOrder?.id ?? "Pedido criado"}
+          </div>
         </div>
       ) : (
         <>
@@ -131,12 +168,31 @@ export function NewOrderModal({ open, onClose }: { open: boolean; onClose: () =>
               <div className="grid grid-cols-2 gap-4">
                 <div>
                   <Label>WhatsApp</Label>
-                  <input className={inputCls} placeholder="+55 19 90000-0000" />
+                  <input
+                    className={inputCls}
+                    placeholder="+55 19 90000-0000"
+                    value={phone}
+                    onChange={(e) => setPhone(e.target.value)}
+                  />
                 </div>
                 <div>
                   <Label>Cidade</Label>
-                  <input className={inputCls} placeholder="Campinas, SP" />
+                  <input
+                    className={inputCls}
+                    placeholder="Campinas, SP"
+                    value={city}
+                    onChange={(e) => setCity(e.target.value)}
+                  />
                 </div>
+              </div>
+              <div>
+                <Label>Contato responsável</Label>
+                <input
+                  className={inputCls}
+                  placeholder="Nome de quem está falando no WhatsApp"
+                  value={contact}
+                  onChange={(e) => setContact(e.target.value)}
+                />
               </div>
               <div>
                 <Label>Tamanho da caixa</Label>

@@ -2,7 +2,8 @@ import { useState } from "react";
 import { PageHeader } from "../components/PageHeader";
 import { Icon } from "../components/ui/Icon";
 import { Avatar, Badge, Button, Card, cx } from "../components/ui/primitives";
-import { CLIENTS, classTone, type ClientClass } from "../data";
+import { classTone, type ClientClass } from "../data";
+import { useAppStore } from "../store/AppStore";
 
 const filters: (ClientClass | "Todos")[] = [
   "Todos",
@@ -15,8 +16,9 @@ const filters: (ClientClass | "Todos")[] = [
 ];
 
 export function Clientes() {
+  const { clients } = useAppStore();
   const [active, setActive] = useState<(typeof filters)[number]>("Todos");
-  const rows = CLIENTS.filter((c) => active === "Todos" || c.klass === active);
+  const rows = clients.filter((c) => active === "Todos" || c.klass === active);
 
   return (
     <>
@@ -96,7 +98,7 @@ export function Clientes() {
       </Card>
 
       <p className="mt-4 text-xs text-muted-foreground">
-        Mostrando {rows.length} de {CLIENTS.length} clientes · Mensagens de acompanhamento
+        Mostrando {rows.length} de {clients.length} clientes · Mensagens de acompanhamento
         automáticas enviadas a quem não responde há 48 h.
       </p>
     </>

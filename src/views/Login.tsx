@@ -2,14 +2,10 @@ import { useState, type FormEvent } from "react";
 import { BrandLogo } from "../components/BrandLogo";
 import { Icon } from "../components/ui/Icon";
 import { Button } from "../components/ui/primitives";
+import { useAppStore } from "../store/AppStore";
 
 const OVEN_IMG =
   "https://images.unsplash.com/photo-1606152196365-d1ce5ea838b5?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&q=80&w=1400";
-
-const ACCOUNTS: Record<string, string> = {
-  "designer@pizzabox.com.br": "design123",
-  "admin@pizzabox.com.br": "admin123",
-};
 
 function LoginLogo() {
   return (
@@ -22,7 +18,8 @@ function LoginLogo() {
 const fieldCls =
   "w-full rounded-2xl border border-border bg-secondary/40 px-4 py-3 text-sm text-foreground placeholder:text-muted-foreground transition-colors focus:border-primary/50 focus:bg-card focus:outline-none focus:ring-2 focus:ring-ring/20";
 
-export function Login({ onSuccess }: { onSuccess: () => void }) {
+export function Login() {
+  const { login } = useAppStore();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [show, setShow] = useState(false);
@@ -38,8 +35,8 @@ export function Login({ onSuccess }: { onSuccess: () => void }) {
     }
     setLoading(true);
     setTimeout(() => {
-      if (ACCOUNTS[email.trim().toLowerCase()] === password) {
-        onSuccess();
+      if (login(email, password)) {
+        return;
       } else {
         setError("E-mail ou senha incorretos. Confira os acessos de demonstração.");
         setLoading(false);
