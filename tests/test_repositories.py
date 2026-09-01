@@ -25,6 +25,19 @@ def test_client_upsert_updates_existing(db):
     assert len(repo.client_list(db)) == 1
 
 
+def test_client_order_count_and_delete(db, sample_template):
+    client = repo.client_create(db, "Pizzaria Delete", "11977770000")
+    assert repo.client_order_count(db, client["id"]) == 0
+
+    repo.client_delete(db, client["id"])
+    assert repo.client_get(db, client["id"]) is None
+
+
+def test_client_order_count_with_order(db, sample_client, sample_template):
+    repo.order_create(db, sample_client["id"], sample_template["id"], {})
+    assert repo.client_order_count(db, sample_client["id"]) == 1
+
+
 def test_order_create_with_quantidade(db, sample_client, sample_template):
     order = repo.order_create(
         db, sample_client["id"], sample_template["id"], {}, quantidade=1500

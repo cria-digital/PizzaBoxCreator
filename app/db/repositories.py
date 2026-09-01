@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from sqlalchemy import func, select, update, delete
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from app.db.models import (
@@ -64,14 +65,31 @@ def client_get_by_phone(db: Session, phone: str) -> dict | None:
 
 
 def client_update(db: Session, client_id: int, **fields) -> dict:
+    if "phone" in fields and fields["phone"] is not None:
+        fields["phone"] = normalize_phone(fields["phone"])
     stmt = (
         update(Client)
         .where(Client.id == client_id)
         .values(**fields)
     )
+    try:
+        db.execute(stmt)
+        db.commit()
+    except IntegrityError:
+        db.rollback()
+        raise
+    return client_get(db, client_id)
+
+
+def client_order_count(db: Session, client_id: int) -> int:
+    stmt = select(func.count()).select_from(Order).where(Order.client_id == client_id)
+    return db.scalar(stmt)
+
+
+def client_delete(db: Session, client_id: int) -> None:
+    stmt = delete(Client).where(Client.id == client_id)
     db.execute(stmt)
     db.commit()
-    return client_get(db, client_id)
 
 
 def client_list(db: Session, search: str | None = None) -> list[dict]:

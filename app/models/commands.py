@@ -1,7 +1,9 @@
 from __future__ import annotations
 
 from enum import Enum
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
+
+from app.utils.phone import normalize_phone
 
 
 class TemaFundo(str, Enum):
@@ -69,6 +71,69 @@ class ClientCreate(BaseModel):
     phone: str
     instagram: str | None = None
     logo_path: str | None = None
+
+    @field_validator("name")
+    @classmethod
+    def _validate_name(cls, value: str) -> str:
+        value = value.strip()
+        if len(value) < 2:
+            raise ValueError("Nome do cliente deve ter pelo menos 2 caracteres")
+        return value
+
+    @field_validator("phone")
+    @classmethod
+    def _validate_phone(cls, value: str) -> str:
+        normalized = normalize_phone(value)
+        if len(normalized) < 10 or len(normalized) > 14:
+            raise ValueError("Telefone deve ter entre 10 e 14 digitos")
+        return normalized
+
+    @field_validator("instagram")
+    @classmethod
+    def _normalize_instagram(cls, value: str | None) -> str | None:
+        if value is None:
+            return None
+        value = value.strip()
+        if not value:
+            return None
+        return value if value.startswith("@") else f"@{value}"
+
+
+class ClientUpdate(BaseModel):
+    name: str | None = None
+    phone: str | None = None
+    instagram: str | None = None
+    logo_path: str | None = None
+
+    @field_validator("name")
+    @classmethod
+    def _validate_name(cls, value: str | None) -> str | None:
+        if value is None:
+            return None
+        value = value.strip()
+        if len(value) < 2:
+            raise ValueError("Nome do cliente deve ter pelo menos 2 caracteres")
+        return value
+
+    @field_validator("phone")
+    @classmethod
+    def _validate_phone(cls, value: str | None) -> str | None:
+        if value is None:
+            return None
+        normalized = normalize_phone(value)
+        if len(normalized) < 10 or len(normalized) > 14:
+            raise ValueError("Telefone deve ter entre 10 e 14 digitos")
+        return normalized
+
+    @field_validator("instagram")
+    @classmethod
+    def _normalize_instagram(cls, value: str | None) -> str | None:
+        if value is None:
+            return None
+        value = value.strip()
+        if not value:
+            return None
+        return value if value.startswith("@") else f"@{value}"
 
 
 class ClientResponse(BaseModel):
