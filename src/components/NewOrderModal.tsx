@@ -35,6 +35,8 @@ export function NewOrderModal({ open, onClose }: { open: boolean; onClose: () =>
   const [contact, setContact] = useState("");
   const [done, setDone] = useState(false);
   const [createdOrder, setCreatedOrder] = useState<Order | null>(null);
+  const [submitting, setSubmitting] = useState(false);
+  const [submitError, setSubmitError] = useState("");
 
   // AI briefing
   const [logo, setLogo] = useState(false);
@@ -67,16 +69,25 @@ export function NewOrderModal({ open, onClose }: { open: boolean; onClose: () =>
       setCity("");
       setContact("");
       setCreatedOrder(null);
+      setSubmitting(false);
+      setSubmitError("");
     }, 250);
   }
 
-  function submitOrder() {
+  async function submitOrder() {
+    setSubmitting(true);
+    setSubmitError("");
+    if (!name.trim() || !phone.trim()) {
+      setSubmitError("Informe nome da pizzaria e WhatsApp para criar o pedido.");
+      setSubmitting(false);
+      return;
+    }
     const activeInfo = Object.fromEntries(
       infoKeys.map((key) => [key, info[key].on ? info[key].value : ""]),
     ) as Record<(typeof infoKeys)[number], string>;
 
     const input: NewOrderInput = {
-      pizzaria: name || "Nova pizzaria",
+      pizzaria: name,
       city,
       phone: phone || activeInfo.Telefone,
       contact,
@@ -89,9 +100,17 @@ export function NewOrderModal({ open, onClose }: { open: boolean; onClose: () =>
       hasReference: reference,
     };
 
-    const order = createOrder(input);
-    setCreatedOrder(order);
-    setDone(true);
+    try {
+      const order = await createOrder(input);
+      setCreatedOrder(order);
+      setDone(true);
+    } catch (error) {
+      setSubmitError(
+        error instanceof Error ? error.message : "Nao foi possivel criar o pedido",
+      );
+    } finally {
+      setSubmitting(false);
+    }
   }
 
   const footer = done ? (
@@ -108,8 +127,8 @@ export function NewOrderModal({ open, onClose }: { open: boolean; onClose: () =>
           Continuar <Icon name="chevronRight" size={16} />
         </Button>
       ) : (
-        <Button onClick={submitOrder}>
-          <Icon name="chat" size={16} /> Criar e abrir no WhatsApp
+        <Button onClick={submitOrder} disabled={submitting}>
+          <Icon name="chat" size={16} /> {submitting ? "Criando..." : "Criar pedido"}
         </Button>
       )}
     </>
@@ -132,8 +151,9 @@ export function NewOrderModal({ open, onClose }: { open: boolean; onClose: () =>
             {name || "Nova pizzaria"} está na fila
           </h3>
           <p className="mt-2 max-w-sm text-sm text-muted-foreground">
-            Um atendimento automático foi disparado no WhatsApp para coletar logo, endereço e sabores.
-            O pedido entra na etapa <strong className="text-foreground">Coleta de dados</strong>.
+            O pedido foi salvo na fila e entra na etapa{" "}
+            <strong className="text-foreground">Coleta de dados</strong>. O disparo no
+            WhatsApp entra no proximo modulo.
           </p>
           <div className="mt-4 font-mono text-xs text-muted-foreground">
             {createdOrder?.id ?? "Pedido criado"}
@@ -424,6 +444,11 @@ export function NewOrderModal({ open, onClose }: { open: boolean; onClose: () =>
               <Badge tone="sauce" dot className="w-fit">
                 Preview com marca d'água será gerado pela IA
               </Badge>
+              {submitError && (
+                <p className="rounded-2xl border border-primary/30 bg-primary/10 px-4 py-3 text-sm font-medium text-primary">
+                  {submitError}
+                </p>
+              )}
             </div>
           )}
         </>

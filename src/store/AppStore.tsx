@@ -1,10 +1,12 @@
 import {
   createContext,
+  useEffect,
   useContext,
   useMemo,
   useState,
   type ReactNode,
 } from "react";
+import { backendApi } from "../api/backend";
 import {
   CLIENTS,
   ORDERS,
@@ -44,10 +46,14 @@ type AppStoreValue = {
   user: User | null;
   orders: Order[];
   clients: Client[];
+  backendEnabled: boolean;
+  loadingData: boolean;
+  dataError: string;
   login: (email: string, password: string) => boolean;
   logout: () => void;
-  createOrder: (input: NewOrderInput) => Order;
+  createOrder: (input: NewOrderInput) => Promise<Order>;
   updateOrderStage: (orderId: string, stage: Stage) => void;
+  reloadData: () => Promise<void>;
 };
 
 const DATA_KEY = "pizza-box-creator:data:v1";
@@ -129,10 +135,33 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<User | null>(initialUser);
   const [orders, setOrders] = useState<Order[]>(initialData.orders);
   const [clients, setClients] = useState<Client[]>(initialData.clients);
+  const [loadingData, setLoadingData] = useState(backendApi.enabled);
+  const [dataError, setDataError] = useState("");
 
   function persist(nextOrders: Order[], nextClients: Client[]) {
+    if (backendApi.enabled) return;
     writeJson(DATA_KEY, { orders: nextOrders, clients: nextClients });
   }
+
+  async function reloadData() {
+    if (!backendApi.enabled) return;
+
+    setLoadingData(true);
+    setDataError("");
+    try {
+      const snapshot = await backendApi.loadSnapshot();
+      setOrders(snapshot.orders);
+      setClients(snapshot.clients);
+    } catch (error) {
+      setDataError(error instanceof Error ? error.message : "Falha ao carregar banco");
+    } finally {
+      setLoadingData(false);
+    }
+  }
+
+  useEffect(() => {
+    void reloadData();
+  }, []);
 
   function login(email: string, password: string) {
     const account = ACCOUNTS.find(
@@ -156,7 +185,13 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
     window.localStorage.removeItem(SESSION_KEY);
   }
 
-  function createOrder(input: NewOrderInput) {
+  async function createOrder(input: NewOrderInput) {
+    if (backendApi.enabled) {
+      const order = await backendApi.createOrder(input);
+      await reloadData();
+      return order;
+    }
+
     const existingClient = clients.find(
       (client) => client.name.toLowerCase() === input.pizzaria.trim().toLowerCase(),
     );
@@ -217,10 +252,14 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
     user,
     orders,
     clients,
+    backendEnabled: backendApi.enabled,
+    loadingData,
+    dataError,
     login,
     logout,
     createOrder,
     updateOrderStage,
+    reloadData,
   };
 
   return <AppStoreContext.Provider value={value}>{children}</AppStoreContext.Provider>;

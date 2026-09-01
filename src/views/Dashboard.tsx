@@ -256,7 +256,7 @@ function DiskTracker() {
 }
 
 export function Dashboard() {
-  const { orders, clients } = useAppStore();
+  const { orders, clients, backendEnabled, loadingData, dataError, reloadData } = useAppStore();
   const [newOrderOpen, setNewOrderOpen] = useState(false);
   const activeOrders = orders.filter((order) => order.stage !== "Impressão");
   const waitingApproval = orders.filter((order) => order.stage === "Preview enviado" || order.stage === "Ajustes");
@@ -298,6 +298,14 @@ export function Dashboard() {
         subtitle="Acompanhe a produção de artes de caixas — do primeiro oi no WhatsApp até a chapa na impressora."
         actions={
           <>
+            <Badge tone={backendEnabled ? "basil" : "neutral"} dot>
+              {backendEnabled ? (loadingData ? "Sincronizando banco" : "Banco conectado") : "Modo local"}
+            </Badge>
+            {dataError && (
+              <Button variant="outline" onClick={reloadData}>
+                <Icon name="help" size={16} /> Recarregar dados
+              </Button>
+            )}
             <Button variant="outline">
               <Icon name="download" size={16} /> Relatório
             </Button>
