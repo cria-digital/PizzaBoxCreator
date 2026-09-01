@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useMemo, useState, type ChangeEvent } from "react";
 import { Modal } from "./ui/Overlay";
 import { Icon } from "./ui/Icon";
 import { Badge, Button, cx } from "./ui/primitives";
@@ -26,9 +26,11 @@ const inputCls =
 const isHex = (v: string) => /^#([0-9a-fA-F]{3}|[0-9a-fA-F]{6})$/.test(v);
 
 export function NewOrderModal({ open, onClose }: { open: boolean; onClose: () => void }) {
-  const { createOrder } = useAppStore();
+  const { backendEnabled, catalog, createOrder } = useAppStore();
   const [step, setStep] = useState(0);
   const [size, setSize] = useState(boxSizes[1]);
+  const [quantity, setQuantity] = useState("1000");
+  const [templateId, setTemplateId] = useState<number | "">("");
   const [name, setName] = useState("");
   const [phone, setPhone] = useState("");
   const [city, setCity] = useState("");
@@ -39,8 +41,8 @@ export function NewOrderModal({ open, onClose }: { open: boolean; onClose: () =>
   const [submitError, setSubmitError] = useState("");
 
   // AI briefing
-  const [logo, setLogo] = useState(false);
-  const [reference, setReference] = useState(false);
+  const [logoFile, setLogoFile] = useState<File | null>(null);
+  const [referenceFiles, setReferenceFiles] = useState<File[]>([]);
   const [colors, setColors] = useState<string[]>(["#df4526"]);
   const [context, setContext] = useState("");
   const [mustText, setMustText] = useState("");
@@ -57,6 +59,18 @@ export function NewOrderModal({ open, onClose }: { open: boolean; onClose: () =>
   const removeColor = (i: number) => setColors((prev) => prev.filter((_, idx) => idx !== i));
   const updateInfo = (k: string, patch: Partial<{ on: boolean; value: string }>) =>
     setInfo((prev) => ({ ...prev, [k]: { ...prev[k], ...patch } }));
+  const templateOptions = useMemo(
+    () => catalog.filter((item) => item.productType === "pizza" || item.productType === "esfiha"),
+    [catalog],
+  );
+
+  function chooseLogo(event: ChangeEvent<HTMLInputElement>) {
+    setLogoFile(event.target.files?.[0] ?? null);
+  }
+
+  function chooseReferences(event: ChangeEvent<HTMLInputElement>) {
+    setReferenceFiles(Array.from(event.target.files ?? []));
+  }
 
   function close() {
     onClose();
@@ -68,6 +82,10 @@ export function NewOrderModal({ open, onClose }: { open: boolean; onClose: () =>
       setPhone("");
       setCity("");
       setContact("");
+      setQuantity("1000");
+      setTemplateId("");
+      setLogoFile(null);
+      setReferenceFiles([]);
       setCreatedOrder(null);
       setSubmitting(false);
       setSubmitError("");
@@ -96,8 +114,12 @@ export function NewOrderModal({ open, onClose }: { open: boolean; onClose: () =>
       requiredText: mustText,
       colors,
       context,
-      hasLogo: logo,
-      hasReference: reference,
+      hasLogo: Boolean(logoFile),
+      hasReference: referenceFiles.length > 0,
+      quantity: Number(quantity) || null,
+      templateId: typeof templateId === "number" ? templateId : null,
+      logoFile,
+      referenceFiles,
     };
 
     try {
@@ -214,6 +236,34 @@ export function NewOrderModal({ open, onClose }: { open: boolean; onClose: () =>
                   onChange={(e) => setContact(e.target.value)}
                 />
               </div>
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <Label>Quantidade</Label>
+                  <input
+                    className={inputCls}
+                    inputMode="numeric"
+                    placeholder="1000"
+                    value={quantity}
+                    onChange={(e) => setQuantity(e.target.value.replace(/\D/g, ""))}
+                  />
+                </div>
+                <div>
+                  <Label>Modelo</Label>
+                  <select
+                    className={inputCls}
+                    value={templateId}
+                    onChange={(e) => setTemplateId(e.target.value ? Number(e.target.value) : "")}
+                    disabled={!backendEnabled || templateOptions.length === 0}
+                  >
+                    <option value="">Auto por tamanho</option>
+                    {templateOptions.map((template) => (
+                      <option key={template.id} value={template.id}>
+                        {template.displayName}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              </div>
               <div>
                 <Label>Tamanho da caixa</Label>
                 <div className="flex flex-wrap gap-2">
@@ -245,25 +295,30 @@ export function NewOrderModal({ open, onClose }: { open: boolean; onClose: () =>
               {/* logotipo */}
               <div>
                 <Label>Inserção de logotipo</Label>
-                <button
-                  type="button"
-                  onClick={() => setLogo((v) => !v)}
+                <label
                   className={cx(
+                    "cursor-pointer",
                     "flex w-full items-center gap-3 rounded-2xl border px-4 py-3 text-left transition-colors",
-                    logo ? "border-primary bg-primary/5" : "border-border hover:border-primary/40",
+                    logoFile ? "border-primary bg-primary/5" : "border-border hover:border-primary/40",
                   )}
                 >
+                  <input
+                    type="file"
+                    accept="image/png,image/jpeg,image/webp,image/svg+xml"
+                    className="sr-only"
+                    onChange={chooseLogo}
+                  />
                   <span className="grid size-9 shrink-0 place-items-center rounded-lg bg-secondary text-secondary-foreground">
                     <Icon name="image" size={16} />
                   </span>
                   <span className="flex-1">
                     <span className="block text-sm font-medium text-foreground">
-                      {logo ? "Logotipo anexado" : "Anexar logotipo"}
+                      {logoFile ? logoFile.name : "Anexar logotipo"}
                     </span>
                     <span className="block text-xs text-muted-foreground">PNG ou SVG · fundo transparente</span>
                   </span>
-                  {logo && <Icon name="check" size={16} className="text-primary" />}
-                </button>
+                  {logoFile && <Icon name="check" size={16} className="text-primary" />}
+                </label>
               </div>
 
               {/* cores — livre com color picker + hex */}
@@ -337,27 +392,35 @@ export function NewOrderModal({ open, onClose }: { open: boolean; onClose: () =>
               {/* referência visual */}
               <div>
                 <Label>Referência visual</Label>
-                <button
-                  type="button"
-                  onClick={() => setReference((v) => !v)}
+                <label
                   className={cx(
+                    "cursor-pointer",
                     "flex w-full items-center gap-3 rounded-2xl border border-dashed px-4 py-3 text-left transition-colors",
-                    reference ? "border-primary bg-primary/5" : "border-border hover:border-primary/40",
+                    referenceFiles.length ? "border-primary bg-primary/5" : "border-border hover:border-primary/40",
                   )}
                 >
+                  <input
+                    type="file"
+                    multiple
+                    accept="image/png,image/jpeg,image/webp,application/pdf"
+                    className="sr-only"
+                    onChange={chooseReferences}
+                  />
                   <span className="grid size-9 shrink-0 place-items-center rounded-lg bg-secondary text-secondary-foreground">
                     <Icon name="palette" size={16} />
                   </span>
                   <span className="flex-1 text-sm">
                     <span className="block font-medium text-foreground">
-                      {reference ? "Referência anexada" : "Enviar imagem de referência"}
+                      {referenceFiles.length
+                        ? `${referenceFiles.length} arquivo(s) selecionado(s)`
+                        : "Enviar imagem de referência"}
                     </span>
                     <span className="block text-xs text-muted-foreground">
                       Uma arte ou estilo que sirva de inspiração
                     </span>
                   </span>
-                  {reference && <Icon name="check" size={16} className="text-primary" />}
-                </button>
+                  {referenceFiles.length > 0 && <Icon name="check" size={16} className="text-primary" />}
+                </label>
               </div>
 
               {/* informações na caixa */}
@@ -416,8 +479,10 @@ export function NewOrderModal({ open, onClose }: { open: boolean; onClose: () =>
                 {[
                   ["Pizzaria", name || "—"],
                   ["Tamanho da caixa", size],
-                  ["Logotipo", logo ? "Anexado" : "Não"],
-                  ["Referência", reference ? "Anexada" : "Não"],
+                  ["Quantidade", quantity || "—"],
+                  ["Modelo", templateOptions.find((item) => item.id === templateId)?.displayName ?? "Auto"],
+                  ["Logotipo", logoFile?.name ?? "Não"],
+                  ["Referência", referenceFiles.length ? `${referenceFiles.length} arquivo(s)` : "Não"],
                   ["Informações", infoKeys.filter((k) => info[k].on).join(", ") || "—"],
                   ["Texto obrigatório", mustText || "—"],
                 ].map(([k, v]) => (

@@ -8,8 +8,11 @@ import {
 } from "react";
 import { backendApi, type ClientInput } from "../api/backend";
 import {
+  type AuditEntry,
+  type CatalogItem,
   CLIENTS,
   ORDERS,
+  type OrderFile,
   STAGES,
   type Client,
   type ClientClass,
@@ -36,6 +39,10 @@ export type NewOrderInput = {
   context?: string;
   hasLogo: boolean;
   hasReference: boolean;
+  quantity?: number | null;
+  templateId?: number | null;
+  logoFile?: File | null;
+  referenceFiles: File[];
 };
 
 export type ClientFormInput = ClientInput;
@@ -44,6 +51,7 @@ type AppStoreValue = {
   user: User | null;
   orders: Order[];
   clients: Client[];
+  catalog: CatalogItem[];
   backendEnabled: boolean;
   authLoading: boolean;
   loadingData: boolean;
@@ -54,7 +62,10 @@ type AppStoreValue = {
   updateClient: (client: Client, input: ClientFormInput) => Promise<Client>;
   deleteClient: (client: Client) => Promise<void>;
   createOrder: (input: NewOrderInput) => Promise<Order>;
-  updateOrderStage: (orderId: string, stage: Stage) => void;
+  updateOrderStage: (orderId: string, stage: Stage) => Promise<void>;
+  uploadOrderAsset: (orderId: string, file: File, purpose: "logo" | "reference") => Promise<void>;
+  listOrderFiles: (orderId: string) => Promise<OrderFile[]>;
+  listOrderAudit: (orderId: string) => Promise<AuditEntry[]>;
   reloadData: () => Promise<void>;
 };
 
@@ -117,6 +128,7 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
   const [orders, setOrders] = useState<Order[]>(initialData.orders);
   const [clients, setClients] = useState<Client[]>(initialData.clients);
+  const [catalog, setCatalog] = useState<CatalogItem[]>([]);
   const [authLoading, setAuthLoading] = useState(backendApi.enabled);
   const [loadingData, setLoadingData] = useState(false);
   const [dataError, setDataError] = useState("");
@@ -132,9 +144,13 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
     setLoadingData(true);
     setDataError("");
     try {
-      const snapshot = await backendApi.loadSnapshot();
+      const [snapshot, apiCatalog] = await Promise.all([
+        backendApi.loadSnapshot(),
+        backendApi.loadCatalog(),
+      ]);
       setOrders(snapshot.orders);
       setClients(snapshot.clients);
+      setCatalog(apiCatalog);
     } catch (error) {
       setDataError(error instanceof Error ? error.message : "Falha ao carregar banco");
     } finally {
@@ -328,8 +344,14 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
     persist(orders, nextClients);
   }
 
-  function updateOrderStage(orderId: string, stage: Stage) {
+  async function updateOrderStage(orderId: string, stage: Stage) {
     if (!STAGES.includes(stage)) return;
+    if (backendApi.enabled) {
+      const updated = await backendApi.updateOrderStage(orderId, stage);
+      setOrders((current) => current.map((order) => (order.id === orderId ? updated : order)));
+      await reloadData();
+      return;
+    }
     setOrders((current) => {
       const nextOrders = current.map((order) =>
         order.id === orderId ? { ...order, stage, updatedAt: "agora" } : order,
@@ -339,10 +361,27 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
     });
   }
 
+  async function uploadOrderAsset(orderId: string, file: File, purpose: "logo" | "reference") {
+    if (!backendApi.enabled) return;
+    await backendApi.uploadOrderAsset(orderId, file, purpose);
+    await reloadData();
+  }
+
+  async function listOrderFiles(orderId: string) {
+    if (!backendApi.enabled) return [];
+    return backendApi.listOrderFiles(orderId);
+  }
+
+  async function listOrderAudit(orderId: string) {
+    if (!backendApi.enabled) return [];
+    return backendApi.listOrderAudit(orderId);
+  }
+
   const value: AppStoreValue = {
     user,
     orders,
     clients,
+    catalog,
     backendEnabled: backendApi.enabled,
     authLoading,
     loadingData,
@@ -354,6 +393,9 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
     deleteClient,
     createOrder,
     updateOrderStage,
+    uploadOrderAsset,
+    listOrderFiles,
+    listOrderAudit,
     reloadData,
   };
 

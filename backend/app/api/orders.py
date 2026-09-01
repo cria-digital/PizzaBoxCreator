@@ -44,6 +44,15 @@ class StatusUpdate(BaseModel):
     status: OrderStatus
 
 
+class AuditLogResponse(BaseModel):
+    id: int
+    order_id: int | None = None
+    username: str
+    action: str
+    details: dict | None = None
+    created_at: str
+
+
 # ---------------------------------------------------------------------------
 # CRUD
 # ---------------------------------------------------------------------------
@@ -203,21 +212,28 @@ def reject(order_id: int, body: RejectBody, request: Request, db: Session = Depe
 
 
 @router.patch("/orders/{order_id}/status", response_model=OrderResponse)
-def update_status(order_id: int, body: StatusUpdate, db: Session = Depends(get_db)):
+def update_status(order_id: int, body: StatusUpdate, request: Request, db: Session = Depends(get_db)):
     order = repo.order_get(db, order_id)
     if not order:
         raise HTTPException(404, "Pedido nao encontrado")
 
-    allowed = {
-        OrderStatus.production.value: [OrderStatus.delivered.value],
-    }
-    valid_next = allowed.get(order["status"], [])
-    if body.status.value not in valid_next:
-        raise HTTPException(
-            409, f"Transicao de '{order['status']}' para '{body.status.value}' nao permitida")
-
+    old_status = order["status"]
     order = repo.order_update_status(db, order_id, body.status.value)
+    repo.audit_log(
+        db,
+        get_current_user(request) or "system",
+        "order_status_updated",
+        order_id=order_id,
+        details={"from": old_status, "to": body.status.value},
+    )
     return build_order_response(order, db)
+
+
+@router.get("/orders/{order_id}/audit", response_model=list[AuditLogResponse])
+def list_order_audit(order_id: int, db: Session = Depends(get_db)):
+    if not repo.order_get(db, order_id):
+        raise HTTPException(404, "Pedido nao encontrado")
+    return repo.audit_log_list(db, order_id=order_id)
 
 
 # ---------------------------------------------------------------------------

@@ -14,12 +14,41 @@ export type Stage = (typeof STAGES)[number];
 
 export interface Order {
   id: string;
+  backendId?: number;
   pizzaria: string;
   city: string;
   stage: Stage;
   updatedAt: string;
   revisions: number;
   boxSize: string;
+  quantity?: number | null;
+  templateName?: string;
+  previewUrl?: string | null;
+  productionUrl?: string | null;
+  packageUrl?: string | null;
+}
+
+export interface CatalogItem {
+  id: number;
+  displayName: string;
+  sizeCm?: number | null;
+  productType: string;
+}
+
+export interface OrderFile {
+  kind: string;
+  filename: string;
+  downloadUrl: string;
+  exists: boolean;
+}
+
+export interface AuditEntry {
+  id: number;
+  orderId?: number | null;
+  username: string;
+  action: string;
+  details?: Record<string, unknown> | null;
+  createdAt: string;
 }
 
 export const ORDERS: Order[] = [

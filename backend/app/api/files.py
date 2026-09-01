@@ -6,7 +6,7 @@ import mimetypes
 import uuid
 from pathlib import Path
 
-from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile
+from fastapi import APIRouter, Depends, File, Form, HTTPException, Request, UploadFile
 from fastapi.responses import FileResponse
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
@@ -16,6 +16,7 @@ from app.config import settings
 from app.db import repositories as repo
 from app.db.session import get_db
 from app.services.logo_service import prepare_logo
+from app.web.auth import get_current_user
 
 router = APIRouter(
     prefix="/files",
@@ -47,6 +48,18 @@ def _safe_suffix(filename: str | None) -> str:
 
 def _existing_file(kind: str, order: dict) -> Path | None:
     edit_data = order.get("edit_data") or {}
+    if kind.startswith("reference:"):
+        try:
+            index = int(kind.split(":", 1)[1])
+        except ValueError:
+            return None
+        references = edit_data.get("reference_paths") or []
+        if not isinstance(references, list) or index < 0 or index >= len(references):
+            return None
+        raw_path = references[index]
+        path = Path(raw_path) if isinstance(raw_path, str) else None
+        return path if path and path.exists() else None
+
     paths = {
         "preview": order.get("preview_jpg"),
         "production": order.get("cmyk_psd"),
@@ -79,11 +92,25 @@ def _file_items(order: dict) -> list[OrderFileItem]:
                     exists=True,
                 )
             )
+    references = (order.get("edit_data") or {}).get("reference_paths") or []
+    if isinstance(references, list):
+        for index, raw_path in enumerate(references):
+            path = Path(raw_path) if isinstance(raw_path, str) else None
+            if path and path.exists():
+                items.append(
+                    OrderFileItem(
+                        kind=f"reference:{index}",
+                        filename=path.name,
+                        download_url=f"/api/files/orders/{order['id']}/reference:{index}",
+                        exists=True,
+                    )
+                )
     return items
 
 
 @router.post("", response_model=FileUploadResponse)
 async def upload_file(
+    request: Request,
     file: UploadFile = File(...),
     purpose: str = Form("asset"),
     client_id: int | None = Form(None),
@@ -117,6 +144,22 @@ async def upload_file(
         dest.parent.mkdir(parents=True, exist_ok=True)
         dest.write_bytes(content)
         stored_path = dest
+        if purpose == "reference" and order_id:
+            edit_data = dict(order.get("edit_data") or {})
+            references = edit_data.get("reference_paths") or []
+            if not isinstance(references, list):
+                references = []
+            references.append(str(stored_path))
+            repo.order_update_edit_data(db, order_id, {"reference_paths": references})
+
+    if order_id:
+        repo.audit_log(
+            db,
+            get_current_user(request) or "system",
+            f"file_uploaded:{purpose}",
+            order_id=order_id,
+            details={"filename": file.filename, "stored_path": str(stored_path)},
+        )
 
     return FileUploadResponse(
         purpose=purpose,
@@ -141,7 +184,7 @@ def download_order_file(order_id: int, kind: str, db: Session = Depends(get_db))
     order = repo.order_get(db, order_id)
     if not order:
         raise HTTPException(404, "Pedido nao encontrado")
-    if kind not in {"preview", "production", "package", "source", "logo"}:
+    if kind not in {"preview", "production", "package", "source", "logo"} and not kind.startswith("reference:"):
         raise HTTPException(404, "Tipo de arquivo nao encontrado")
 
     path = _existing_file(kind, order)

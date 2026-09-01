@@ -43,6 +43,16 @@ def test_full_order_lifecycle_without_preview(api_authed_client, db, sample_temp
     assert r.status_code == 200
     assert r.json()["quantidade"] == 1200
 
+    r = api_authed_client.patch(f"/api/orders/{order['id']}/status", json={"status": "revision"})
+    assert r.status_code == 200
+    assert r.json()["status"] == "revision"
+
+    r = api_authed_client.get(f"/api/orders/{order['id']}/audit")
+    assert r.status_code == 200
+    actions = [entry["action"] for entry in r.json()]
+    assert "order_created" in actions
+    assert "order_status_updated" in actions
+
 
 def test_create_order_requires_known_client_or_phone(api_authed_client, sample_template):
     r = api_authed_client.post(

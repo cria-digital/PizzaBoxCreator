@@ -1,4 +1,4 @@
-import type { Client, ClientClass, Order, Stage } from "../data";
+import type { AuditEntry, CatalogItem, Client, ClientClass, Order, OrderFile, Stage } from "../data";
 import type { NewOrderInput } from "../store/AppStore";
 
 type ApiClient = {
@@ -37,8 +37,28 @@ type ApiOrder = {
   status: "draft" | "preview_sent" | "revision" | "approved" | "production" | "delivered";
   quantidade?: number | null;
   edit_data: Record<string, unknown>;
+  preview_url?: string | null;
+  cmyk_url?: string | null;
+  package_url?: string | null;
+  created_at: string;
   updated_at: string;
   revisions?: ApiRevision[];
+};
+
+type ApiOrderFile = {
+  kind: string;
+  filename: string;
+  download_url: string;
+  exists: boolean;
+};
+
+type ApiAuditEntry = {
+  id: number;
+  order_id?: number | null;
+  username: string;
+  action: string;
+  details?: Record<string, unknown> | null;
+  created_at: string;
 };
 
 type BackendSnapshot = {
@@ -68,6 +88,16 @@ const statusToStage: Record<ApiOrder["status"], Stage> = {
   delivered: "Impressão",
 };
 
+const stageToStatus: Record<Stage, ApiOrder["status"]> = {
+  Atendimento: "draft",
+  "Coleta de dados": "draft",
+  "Montagem por camadas": "revision",
+  "Preview enviado": "preview_sent",
+  Ajustes: "revision",
+  Aprovado: "approved",
+  Impressão: "production",
+};
+
 function normalizeBaseUrl(value: unknown) {
   if (typeof value !== "string" || !value.trim()) return "";
   return value.replace(/\/+$/, "");
@@ -78,11 +108,12 @@ function apiUrl(path: string) {
 }
 
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
+  const isFormData = init?.body instanceof FormData;
   const response = await fetch(apiUrl(path), {
     ...init,
     credentials: "include",
     headers: {
-      "Content-Type": "application/json",
+      ...(isFormData ? {} : { "Content-Type": "application/json" }),
       ...(init?.headers ?? {}),
     },
   });
@@ -140,12 +171,18 @@ function cityFrom(order: ApiOrder) {
 function mapOrder(order: ApiOrder): Order {
   return {
     id: `PBX-${order.id}`,
+    backendId: order.id,
     pizzaria: order.client.name,
     city: cityFrom(order),
     stage: statusToStage[order.status],
     updatedAt: formatDateLabel(order.updated_at),
     revisions: order.revisions?.length ?? 0,
     boxSize: boxSizeFrom(order),
+    quantity: order.quantidade ?? null,
+    templateName: order.template.display_name,
+    previewUrl: order.preview_url ?? null,
+    productionUrl: order.cmyk_url ?? null,
+    packageUrl: order.package_url ?? null,
   };
 }
 
@@ -171,12 +208,68 @@ function mapClients(apiClients: ApiClient[], apiOrders: ApiOrder[]): Client[] {
 }
 
 function preferredTemplate(catalog: ApiCatalogItem[], input: NewOrderInput) {
+  if (input.templateId) {
+    const selected = catalog.find((item) => item.id === input.templateId);
+    if (selected) return selected;
+  }
   const size = Number(input.boxSize.replace(/\D/g, ""));
   return (
     catalog.find((item) => item.size_cm === size && item.product_type === "pizza") ??
     catalog.find((item) => item.product_type === "pizza") ??
     catalog[0]
   );
+}
+
+function mapCatalog(item: ApiCatalogItem): CatalogItem {
+  return {
+    id: item.id,
+    displayName: item.display_name,
+    sizeCm: item.size_cm ?? null,
+    productType: item.product_type,
+  };
+}
+
+function mapOrderFile(file: ApiOrderFile): OrderFile {
+  return {
+    kind: file.kind,
+    filename: file.filename,
+    downloadUrl: apiUrl(file.download_url),
+    exists: file.exists,
+  };
+}
+
+function mapAudit(entry: ApiAuditEntry): AuditEntry {
+  return {
+    id: entry.id,
+    orderId: entry.order_id ?? null,
+    username: entry.username,
+    action: entry.action,
+    details: entry.details ?? null,
+    createdAt: formatDateLabel(entry.created_at),
+  };
+}
+
+function backendIdFromOrderId(orderId: string | number) {
+  if (typeof orderId === "number") return orderId;
+  const id = Number(orderId.replace(/\D/g, ""));
+  if (!Number.isFinite(id)) throw new Error("Pedido sem ID de backend");
+  return id;
+}
+
+async function uploadOrderFile(
+  file: File,
+  purpose: "logo" | "reference",
+  ids: { clientId?: number; orderId?: number },
+) {
+  const form = new FormData();
+  form.append("file", file);
+  form.append("purpose", purpose);
+  if (ids.clientId) form.append("client_id", String(ids.clientId));
+  if (ids.orderId) form.append("order_id", String(ids.orderId));
+  return request<{ asset_path: string }>("/api/files", {
+    method: "POST",
+    body: form,
+  });
 }
 
 export const backendApi = {
@@ -218,20 +311,28 @@ export const backendApi = {
     };
   },
 
+  async loadCatalog(): Promise<CatalogItem[]> {
+    if (!API_BASE_URL) throw new Error("VITE_API_BASE_URL is not configured");
+    const catalog = await request<ApiCatalogItem[]>("/api/catalog");
+    return catalog.map(mapCatalog);
+  },
+
   async createOrder(input: NewOrderInput): Promise<Order> {
     if (!API_BASE_URL) throw new Error("VITE_API_BASE_URL is not configured");
 
-    const [client, catalog] = await Promise.all([
-      request<ApiClient>("/api/clients", {
-        method: "POST",
-        body: JSON.stringify({
-          name: input.pizzaria,
-          phone: input.phone,
-          instagram: input.instagram || null,
-        }),
+    const client = await request<ApiClient>("/api/clients", {
+      method: "POST",
+      body: JSON.stringify({
+        name: input.pizzaria,
+        phone: input.phone,
+        instagram: input.instagram || null,
       }),
-      request<ApiCatalogItem[]>("/api/catalog"),
-    ]);
+    });
+
+    const logoUpload = input.logoFile
+      ? await uploadOrderFile(input.logoFile, "logo", { clientId: client.id })
+      : null;
+    const catalog = await request<ApiCatalogItem[]>("/api/catalog");
 
     const template = preferredTemplate(catalog, input);
     if (!template) {
@@ -243,6 +344,7 @@ export const backendApi = {
       body: JSON.stringify({
         client_id: client.id,
         template_id: template.id,
+        quantidade: input.quantity || null,
         edit_data: {
           business_name: input.pizzaria,
           city: input.city,
@@ -255,11 +357,52 @@ export const backendApi = {
           has_logo: input.hasLogo,
           has_reference: input.hasReference,
           box_size: input.boxSize,
+          logo_path: logoUpload?.asset_path,
         },
       }),
     });
 
+    if (input.referenceFiles.length) {
+      await Promise.all(
+        input.referenceFiles.map((file) =>
+          uploadOrderFile(file, "reference", { orderId: order.id }),
+        ),
+      );
+      const withFiles = await request<ApiOrder>(`/api/orders/${order.id}`);
+      return mapOrder(withFiles);
+    }
+
     return mapOrder(order);
+  },
+
+  async updateOrderStage(orderId: string | number, stage: Stage): Promise<Order> {
+    if (!API_BASE_URL) throw new Error("VITE_API_BASE_URL is not configured");
+    const id = backendIdFromOrderId(orderId);
+    const order = await request<ApiOrder>(`/api/orders/${id}/status`, {
+      method: "PATCH",
+      body: JSON.stringify({ status: stageToStatus[stage] }),
+    });
+    return mapOrder(order);
+  },
+
+  async uploadOrderAsset(orderId: string | number, file: File, purpose: "logo" | "reference"): Promise<void> {
+    if (!API_BASE_URL) throw new Error("VITE_API_BASE_URL is not configured");
+    const id = backendIdFromOrderId(orderId);
+    await uploadOrderFile(file, purpose, { orderId: id });
+  },
+
+  async listOrderFiles(orderId: string | number): Promise<OrderFile[]> {
+    if (!API_BASE_URL) throw new Error("VITE_API_BASE_URL is not configured");
+    const id = backendIdFromOrderId(orderId);
+    const files = await request<ApiOrderFile[]>(`/api/files/orders/${id}`);
+    return files.map(mapOrderFile);
+  },
+
+  async listOrderAudit(orderId: string | number): Promise<AuditEntry[]> {
+    if (!API_BASE_URL) throw new Error("VITE_API_BASE_URL is not configured");
+    const id = backendIdFromOrderId(orderId);
+    const entries = await request<ApiAuditEntry[]>(`/api/orders/${id}/audit`);
+    return entries.map(mapAudit);
   },
 
   async createClient(input: ClientInput): Promise<Client> {
