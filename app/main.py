@@ -12,6 +12,7 @@ from fastapi.staticfiles import StaticFiles
 from starlette.responses import PlainTextResponse
 
 from app.api.routes import router
+from app.api.auth import router as auth_router
 from app.api.catalog import router as catalog_router
 from app.api.clients import router as clients_router
 from app.api.orders import router as orders_router
@@ -58,12 +59,14 @@ app.add_middleware(
     allow_origins=settings.cors_origin_list,
     allow_methods=["*"],
     allow_headers=["*"],
+    allow_credentials=True,
 )
 app.add_middleware(MetricsMiddleware)
 
 app.mount("/static", StaticFiles(directory=str(Path(__file__).parent / "static")), name="static")
 
 app.include_router(router, prefix="/api")
+app.include_router(auth_router, prefix="/api")
 app.include_router(catalog_router, prefix="/api")
 app.include_router(clients_router, prefix="/api")
 app.include_router(orders_router, prefix="/api")

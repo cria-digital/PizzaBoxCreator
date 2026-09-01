@@ -8,8 +8,9 @@ from sqlalchemy.orm import Session
 from app.db.session import get_db
 from app.db import repositories as repo
 from app.models.commands import ClientCreate, ClientResponse
+from app.api.auth import require_api_user
 
-router = APIRouter(tags=["clients"])
+router = APIRouter(tags=["clients"], dependencies=[Depends(require_api_user)])
 
 
 @router.post("/clients", response_model=ClientResponse)

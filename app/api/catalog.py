@@ -11,8 +11,9 @@ from app.db.session import get_db
 from app.db import repositories as repo
 from app.models.commands import CatalogItem, CatalogDetail, EditableFieldInfo, LayerInfo
 from app.psd.inspector import inspect_template
+from app.api.auth import require_api_user
 
-router = APIRouter(tags=["catalog"])
+router = APIRouter(tags=["catalog"], dependencies=[Depends(require_api_user)])
 
 
 @router.get("/catalog", response_model=list[CatalogItem])

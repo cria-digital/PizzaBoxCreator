@@ -162,3 +162,36 @@ def test_logout_clears_session(api_client, test_credentials):
     api_client.get("/logout", follow_redirects=False)
     r = api_client.get("/", follow_redirects=False)
     assert r.status_code == 303
+
+
+def test_api_login_sets_session_and_returns_user(api_client, test_credentials):
+    user, password = test_credentials
+    r = api_client.post("/api/auth/login", json={"username": user, "password": password})
+
+    assert r.status_code == 200
+    assert "pizzabox_session" in r.cookies
+    assert r.json()["user"]["email"] == user
+
+
+def test_api_me_requires_session(api_client):
+    r = api_client.get("/api/auth/me")
+    assert r.status_code == 401
+
+
+def test_api_me_returns_current_user_after_login(api_client, test_credentials):
+    user, password = test_credentials
+    api_client.post("/api/auth/login", json={"username": user, "password": password})
+
+    r = api_client.get("/api/auth/me")
+
+    assert r.status_code == 200
+    assert r.json()["user"]["name"] == user
+
+
+def test_api_logout_clears_session(api_client, test_credentials):
+    user, password = test_credentials
+    api_client.post("/api/auth/login", json={"username": user, "password": password})
+
+    r = api_client.post("/api/auth/logout")
+    assert r.status_code == 204
+    assert api_client.get("/api/auth/me").status_code == 401

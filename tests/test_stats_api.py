@@ -1,9 +1,14 @@
-def test_stats_counts_clients_orders_templates(api_client, db, sample_client, sample_template):
+def test_stats_requires_login(api_client):
+    r = api_client.get("/api/stats")
+    assert r.status_code == 401
+
+
+def test_stats_counts_clients_orders_templates(api_authed_client, db, sample_client, sample_template):
     from app.db import repositories as repo
 
     repo.order_create(db, sample_client["id"], sample_template["id"], {})
 
-    r = api_client.get("/api/stats")
+    r = api_authed_client.get("/api/stats")
     assert r.status_code == 200
     data = r.json()
     assert data["total_clients"] == 1
@@ -12,8 +17,8 @@ def test_stats_counts_clients_orders_templates(api_client, db, sample_client, sa
     assert len(data["recent_orders"]) == 1
 
 
-def test_stats_with_empty_db(api_client):
-    r = api_client.get("/api/stats")
+def test_stats_with_empty_db(api_authed_client):
+    r = api_authed_client.get("/api/stats")
     assert r.status_code == 200
     data = r.json()
     assert data["total_clients"] == 0
@@ -21,19 +26,19 @@ def test_stats_with_empty_db(api_client):
     assert data["orders_by_status"] == {}
 
 
-def test_cleanup_preview_reports_nothing_when_no_delivered_orders(api_client, db, sample_client, sample_template):
+def test_cleanup_preview_reports_nothing_when_no_delivered_orders(api_authed_client, db, sample_client, sample_template):
     from app.db import repositories as repo
 
     repo.order_create(db, sample_client["id"], sample_template["id"], {})
 
-    r = api_client.get("/api/cleanup/preview")
+    r = api_authed_client.get("/api/cleanup/preview")
     assert r.status_code == 200
     data = r.json()
     assert data["delivered_orders"] == 0
     assert data["total_files"] == 0
 
 
-def test_cleanup_preview_counts_files_from_delivered_orders(api_client, db, sample_client, sample_template):
+def test_cleanup_preview_counts_files_from_delivered_orders(api_authed_client, db, sample_client, sample_template):
     from app.config import settings
     from app.db import repositories as repo
 
@@ -44,7 +49,7 @@ def test_cleanup_preview_counts_files_from_delivered_orders(api_client, db, samp
     repo.order_set_paths(db, order["id"], preview_jpg=str(preview_path))
     repo.order_update_status(db, order["id"], "delivered")
 
-    r = api_client.get("/api/cleanup/preview")
+    r = api_authed_client.get("/api/cleanup/preview")
     assert r.status_code == 200
     data = r.json()
     assert data["delivered_orders"] == 1
@@ -52,7 +57,7 @@ def test_cleanup_preview_counts_files_from_delivered_orders(api_client, db, samp
     assert data["total_mb"] > 0
 
 
-def test_cleanup_execute_deletes_files_and_clears_paths(api_client, db, sample_client, sample_template):
+def test_cleanup_execute_deletes_files_and_clears_paths(api_authed_client, db, sample_client, sample_template):
     from app.config import settings
     from app.db import repositories as repo
 
@@ -63,7 +68,7 @@ def test_cleanup_execute_deletes_files_and_clears_paths(api_client, db, sample_c
     repo.order_set_paths(db, order["id"], preview_jpg=str(preview_path))
     repo.order_update_status(db, order["id"], "delivered")
 
-    r = api_client.post("/api/cleanup/execute")
+    r = api_authed_client.post("/api/cleanup/execute")
     assert r.status_code == 200
     data = r.json()
     assert data["deleted_files"] == 1

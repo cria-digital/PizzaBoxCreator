@@ -12,11 +12,12 @@ from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from app.config import settings
+from app.api.auth import require_api_user
 from app.db.session import get_db
 from app.db.models import Client, Order, OrderRevision, Template
 
 logger = logging.getLogger(__name__)
-router = APIRouter(tags=["stats"])
+router = APIRouter(tags=["stats"], dependencies=[Depends(require_api_user)])
 
 
 def _dir_size_mb(path: Path) -> float:

@@ -22,6 +22,7 @@ from app.models.commands import (
     OrderUpdate,
 )
 from app.ai.providers import AIUnavailable
+from app.api.auth import require_api_user
 from app.services.ai_cost_guard import AIRateLimitExceeded
 from app.services.order_service import (
     approve_order,
@@ -32,7 +33,7 @@ from app.services.order_service import (
 from app.web.auth import get_current_user
 
 logger = logging.getLogger(__name__)
-router = APIRouter(tags=["orders"])
+router = APIRouter(tags=["orders"], dependencies=[Depends(require_api_user)])
 
 
 class RejectBody(BaseModel):

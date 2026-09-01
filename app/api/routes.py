@@ -11,6 +11,7 @@ from fastapi.responses import FileResponse
 from sqlalchemy.orm import Session
 
 from app.config import settings
+from app.api.auth import require_api_user
 from app.db.session import get_db
 from app.models.commands import (
     EditCommand,
@@ -23,7 +24,7 @@ from app.psd.inspector import inspect_template
 from app.psd.renderer import generate_preview
 
 logger = logging.getLogger(__name__)
-router = APIRouter()
+router = APIRouter(dependencies=[Depends(require_api_user)])
 
 
 @router.get("/templates", response_model=list[str])

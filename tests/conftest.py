@@ -67,6 +67,20 @@ def api_client(db_path):
 
 
 @pytest.fixture
+def api_authed_client(api_client, monkeypatch):
+    from app.config import settings
+
+    monkeypatch.setattr(settings, "admin_user", "admin")
+    monkeypatch.setattr(settings, "admin_password", "test-password-123")
+    response = api_client.post(
+        "/api/auth/login",
+        json={"username": "admin", "password": "test-password-123"},
+    )
+    assert response.status_code == 200
+    return api_client
+
+
+@pytest.fixture
 def sample_client(db):
     from app.db import repositories as repo
 
