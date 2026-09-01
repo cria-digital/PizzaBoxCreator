@@ -8,8 +8,6 @@ __pycache__
 storage/
 temp/
 *.egg-info
-gabaritos/*.psd
-gabaritos/*.psb
 docs/
 tests/
 *.md
