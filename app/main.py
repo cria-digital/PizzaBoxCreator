@@ -13,8 +13,11 @@ from starlette.responses import PlainTextResponse
 
 from app.api.routes import router
 from app.api.auth import router as auth_router
+from app.api.box_generation import router as box_generation_router
 from app.api.catalog import router as catalog_router
 from app.api.clients import router as clients_router
+from app.api.files import router as files_router
+from app.api.final_files import router as final_files_router
 from app.api.orders import router as orders_router
 from app.api.stats import router as stats_router
 from app.api.whatsapp import router as whatsapp_router
@@ -67,8 +70,11 @@ app.mount("/static", StaticFiles(directory=str(Path(__file__).parent / "static")
 
 app.include_router(router, prefix="/api")
 app.include_router(auth_router, prefix="/api")
+app.include_router(box_generation_router, prefix="/api")
 app.include_router(catalog_router, prefix="/api")
 app.include_router(clients_router, prefix="/api")
+app.include_router(files_router, prefix="/api")
+app.include_router(final_files_router, prefix="/api")
 app.include_router(orders_router, prefix="/api")
 app.include_router(stats_router, prefix="/api")
 app.include_router(whatsapp_router, prefix="/api")
