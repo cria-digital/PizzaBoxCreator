@@ -11,6 +11,13 @@ type ApiClient = {
   updated_at: string;
 };
 
+export type ClientInput = {
+  name: string;
+  phone: string;
+  instagram?: string;
+  logoPath?: string | null;
+};
+
 type ApiCatalogItem = {
   id: number;
   display_name: string;
@@ -150,9 +157,12 @@ function mapClients(apiClients: ApiClient[], apiOrders: ApiOrder[]): Client[] {
       .find((value): value is string => typeof value === "string" && value.trim().length > 0);
 
     return {
+      id: client.id,
       name: client.name,
       contact: contact || "Contato via WhatsApp",
       phone: client.phone,
+      instagram: client.instagram || "",
+      logoPath: client.logo_path || null,
       klass: classifyClient(clientOrders.length),
       orders: clientOrders.length,
       lastContact: formatDateLabel(client.updated_at),
@@ -250,5 +260,43 @@ export const backendApi = {
     });
 
     return mapOrder(order);
+  },
+
+  async createClient(input: ClientInput): Promise<Client> {
+    if (!API_BASE_URL) throw new Error("VITE_API_BASE_URL is not configured");
+
+    const client = await request<ApiClient>("/api/clients", {
+      method: "POST",
+      body: JSON.stringify({
+        name: input.name,
+        phone: input.phone,
+        instagram: input.instagram || null,
+        logo_path: input.logoPath || null,
+      }),
+    });
+
+    return mapClients([client], [])[0];
+  },
+
+  async updateClient(clientId: number, input: Partial<ClientInput>): Promise<Client> {
+    if (!API_BASE_URL) throw new Error("VITE_API_BASE_URL is not configured");
+
+    const body: Record<string, string | null> = {};
+    if (input.name !== undefined) body.name = input.name;
+    if (input.phone !== undefined) body.phone = input.phone;
+    if (input.instagram !== undefined) body.instagram = input.instagram || null;
+    if (input.logoPath !== undefined) body.logo_path = input.logoPath || null;
+
+    const client = await request<ApiClient>(`/api/clients/${clientId}`, {
+      method: "PATCH",
+      body: JSON.stringify(body),
+    });
+
+    return mapClients([client], [])[0];
+  },
+
+  async deleteClient(clientId: number): Promise<void> {
+    if (!API_BASE_URL) throw new Error("VITE_API_BASE_URL is not configured");
+    await request<void>(`/api/clients/${clientId}`, { method: "DELETE" });
   },
 };

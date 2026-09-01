@@ -6,7 +6,7 @@ import {
   useState,
   type ReactNode,
 } from "react";
-import { backendApi } from "../api/backend";
+import { backendApi, type ClientInput } from "../api/backend";
 import {
   CLIENTS,
   ORDERS,
@@ -38,6 +38,8 @@ export type NewOrderInput = {
   hasReference: boolean;
 };
 
+export type ClientFormInput = ClientInput;
+
 type AppStoreValue = {
   user: User | null;
   orders: Order[];
@@ -48,6 +50,9 @@ type AppStoreValue = {
   dataError: string;
   login: (username: string, password: string) => Promise<boolean>;
   logout: () => Promise<void>;
+  createClient: (input: ClientFormInput) => Promise<Client>;
+  updateClient: (client: Client, input: ClientFormInput) => Promise<Client>;
+  deleteClient: (client: Client) => Promise<void>;
   createOrder: (input: NewOrderInput) => Promise<Order>;
   updateOrderStage: (orderId: string, stage: Stage) => void;
   reloadData: () => Promise<void>;
@@ -82,6 +87,20 @@ function classifyClient(existing?: Client): ClientClass {
   if (!existing) return "Primeiro pedido";
   if (existing.klass === "VIP") return "VIP";
   return existing.orders >= 5 ? "Recorrente" : existing.klass;
+}
+
+function nextClientId(clients: Client[]) {
+  return clients.reduce((max, client) => Math.max(max, client.id ?? 0), 0) + 1;
+}
+
+function normalizePhone(value: string) {
+  return value.replace(/\D/g, "");
+}
+
+function normalizeInstagram(value?: string) {
+  const clean = (value || "").trim();
+  if (!clean) return "";
+  return clean.startsWith("@") ? clean : `@${clean}`;
 }
 
 type StoredData = {
@@ -228,6 +247,87 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
     return order;
   }
 
+  async function createClient(input: ClientFormInput) {
+    if (backendApi.enabled) {
+      const client = await backendApi.createClient(input);
+      await reloadData();
+      return client;
+    }
+
+    const phone = normalizePhone(input.phone);
+    const existing = clients.find((client) => normalizePhone(client.phone) === phone);
+    if (existing) {
+      throw new Error("Ja existe cliente com esse telefone");
+    }
+
+    const nextClient: Client = {
+      id: nextClientId(clients),
+      name: input.name.trim(),
+      contact: "Contato via WhatsApp",
+      phone,
+      instagram: normalizeInstagram(input.instagram),
+      logoPath: input.logoPath || null,
+      klass: "Primeiro pedido",
+      orders: 0,
+      lastContact: "Hoje",
+    };
+    const nextClients = [nextClient, ...clients];
+    setClients(nextClients);
+    persist(orders, nextClients);
+    return nextClient;
+  }
+
+  async function updateClient(client: Client, input: ClientFormInput) {
+    if (backendApi.enabled) {
+      if (!client.id) throw new Error("Cliente sem ID de backend");
+      const updated = await backendApi.updateClient(client.id, input);
+      await reloadData();
+      return updated;
+    }
+
+    const phone = normalizePhone(input.phone);
+    const duplicate = clients.find(
+      (item) => item !== client && normalizePhone(item.phone) === phone,
+    );
+    if (duplicate) {
+      throw new Error("Ja existe cliente com esse telefone");
+    }
+
+    let updatedClient: Client = client;
+    const nextClients = clients.map((item) => {
+      if (item !== client) return item;
+      updatedClient = {
+        ...item,
+        name: input.name.trim(),
+        phone,
+        instagram: normalizeInstagram(input.instagram),
+        logoPath: input.logoPath || item.logoPath || null,
+        lastContact: "Hoje",
+      };
+      return updatedClient;
+    });
+    setClients(nextClients);
+    persist(orders, nextClients);
+    return updatedClient;
+  }
+
+  async function deleteClient(client: Client) {
+    if (client.orders > 0) {
+      throw new Error("Cliente possui pedidos e nao pode ser excluido");
+    }
+
+    if (backendApi.enabled) {
+      if (!client.id) throw new Error("Cliente sem ID de backend");
+      await backendApi.deleteClient(client.id);
+      await reloadData();
+      return;
+    }
+
+    const nextClients = clients.filter((item) => item !== client);
+    setClients(nextClients);
+    persist(orders, nextClients);
+  }
+
   function updateOrderStage(orderId: string, stage: Stage) {
     if (!STAGES.includes(stage)) return;
     setOrders((current) => {
@@ -249,6 +349,9 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
     dataError,
     login,
     logout,
+    createClient,
+    updateClient,
+    deleteClient,
     createOrder,
     updateOrderStage,
     reloadData,

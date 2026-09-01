@@ -61,9 +61,12 @@ export const classTone: Record<ClientClass, Tone> = {
 };
 
 export interface Client {
+  id?: number;
   name: string;
   contact: string;
   phone: string;
+  instagram?: string;
+  logoPath?: string | null;
   klass: ClientClass;
   orders: number;
   lastContact: string;
