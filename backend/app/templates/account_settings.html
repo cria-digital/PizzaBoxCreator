@@ -1,0 +1,48 @@
+{% extends "base.html" %}
+{% block title %}Minha Conta - Pizza Box Agent{% endblock %}
+
+{% block content %}
+<div class="page-header">
+  <h4><i class="bi bi-person-lock" style="color: var(--brand-orange)"></i> Minha Conta</h4>
+</div>
+
+{% if msg %}
+<div class="alert alert-brand py-2 px-3 small">{{ msg }}</div>
+{% endif %}
+{% if error %}
+<div class="alert alert-danger py-2 px-3 small">{{ error }}</div>
+{% endif %}
+
+<div class="row g-3">
+  <div class="col-lg-6">
+    <div class="card shadow-sm border-0">
+      <div class="card-body">
+        <h6 class="fw-bold mb-3">Usuario e senha</h6>
+        <form method="POST" action="/configuracoes/conta">
+          <div class="mb-3">
+            <label class="form-label fw-semibold">Usuario</label>
+            <input type="text" name="username" class="form-control" value="{{ current_username }}" required>
+          </div>
+          <div class="mb-3">
+            <label class="form-label fw-semibold">Nova senha</label>
+            <input type="password" name="new_password" class="form-control" autocomplete="new-password"
+                   placeholder="deixe em branco para manter a atual">
+            <div class="form-text">Minimo 8 caracteres.</div>
+          </div>
+          <div class="mb-3">
+            <label class="form-label fw-semibold">Confirmar nova senha</label>
+            <input type="password" name="confirm_password" class="form-control" autocomplete="new-password">
+          </div>
+          <hr>
+          <div class="mb-3">
+            <label class="form-label fw-semibold">Senha atual <span class="text-danger">*</span></label>
+            <input type="password" name="current_password" class="form-control" autocomplete="current-password" required>
+            <div class="form-text">Obrigatoria para confirmar qualquer alteracao acima.</div>
+          </div>
+          <button type="submit" class="btn btn-brand"><i class="bi bi-save"></i> Salvar</button>
+        </form>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}

@@ -1,0 +1,526 @@
+/* ========================================
+   Pizza Box Agent — Brand Theme
+   Cores: Laranja (#F57C00) + Preto quente (kraft/papelao)
+   ======================================== */
+
+:root {
+  --brand-orange: #F57C00;
+  --brand-orange-light: #FF9800;
+  --brand-orange-dark: #E65100;
+  --brand-orange-glow: rgba(245, 124, 0, 0.15);
+  --brand-orange-subtle: #FFF3E0;
+  --brand-black: #1B1712;
+  --brand-dark: #26201A;
+  --brand-gray: #4A4038;
+  --brand-kraft: #B9773F;
+  --brand-kraft-pale: #F3ECE1;
+  --brand-light: #F3ECE1;
+  --brand-white: #FBF9F6;
+  --brand-border: #E4DACB;
+  --text-primary: #241E17;
+  --text-secondary: #79695A;
+  --text-on-dark: #F3ECE1;
+}
+
+body {
+  background-color: var(--brand-light);
+  color: var(--text-primary);
+  font-family: 'Inter', 'Segoe UI', system-ui, -apple-system, sans-serif;
+}
+
+table, .stat-number, .disk-row strong {
+  font-variant-numeric: tabular-nums;
+}
+
+:focus-visible {
+  outline: 2px solid var(--brand-orange);
+  outline-offset: 2px;
+}
+
+/* ── Navbar ─────────────────────────────── */
+/* Flauta de papelao sutil (textura em relevo) sob o degrade da marca */
+.navbar-brand-custom {
+  background:
+    repeating-linear-gradient(
+      115deg,
+      rgba(255, 255, 255, 0.03) 0px,
+      rgba(255, 255, 255, 0.03) 2px,
+      transparent 2px,
+      transparent 9px
+    ),
+    linear-gradient(135deg, var(--brand-black) 0%, var(--brand-dark) 100%);
+  border-bottom: 3px solid var(--brand-orange);
+}
+
+.navbar-brand-custom .navbar-brand {
+  color: var(--brand-orange) !important;
+  font-weight: 700;
+  letter-spacing: 0.5px;
+}
+
+.navbar-brand-custom .navbar-brand i {
+  color: var(--brand-orange-light);
+}
+
+.navbar-brand-custom .nav-link {
+  color: rgba(255, 255, 255, 0.7) !important;
+  font-weight: 500;
+  font-size: 0.9rem;
+  padding: 0.5rem 1rem !important;
+  border-radius: 6px;
+  transition: all 0.2s;
+}
+
+.navbar-brand-custom .nav-link:hover {
+  color: #fff !important;
+  background: rgba(245, 124, 0, 0.15);
+}
+
+.navbar-brand-custom .nav-link.active {
+  color: #fff !important;
+  background: var(--brand-orange);
+}
+
+.btn-new-order {
+  background: var(--brand-orange) !important;
+  border: none !important;
+  color: #fff !important;
+  font-weight: 600;
+  border-radius: 8px;
+  transition: all 0.2s;
+}
+
+.btn-new-order:hover {
+  background: var(--brand-orange-dark) !important;
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px rgba(245, 124, 0, 0.35);
+}
+
+/* ── Cards ──────────────────────────────── */
+.card {
+  border-radius: 12px;
+  border: 1px solid var(--brand-border);
+  transition: box-shadow 0.2s;
+}
+
+.card:hover {
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.08);
+}
+
+.card-header {
+  border-bottom: 1px solid var(--brand-border);
+  font-size: 0.9rem;
+}
+
+/* ── Stat cards ─────────────────────────── */
+/* Selo carimbado: circulo tracejado, como um carimbo de tinta em papelao,
+   em vez da barra de cor no topo (padrao generico de dashboard). */
+.stat-card {
+  border: 1px solid var(--brand-border);
+  border-radius: 14px;
+  background: var(--brand-white);
+  position: relative;
+}
+
+.stat-icon-stamp {
+  width: 42px;
+  height: 42px;
+  margin: 0 auto 10px;
+  border: 2px dashed currentColor;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1.15rem;
+  opacity: 0.9;
+}
+
+.stat-card-orange .stat-icon-stamp { color: var(--brand-orange); }
+.stat-card-dark .stat-icon-stamp { color: var(--brand-black); }
+.stat-card-success .stat-icon-stamp { color: #43A047; }
+.stat-card-info .stat-icon-stamp { color: #1E88E5; }
+
+.stat-number {
+  font-size: 2.2rem;
+  font-weight: 800;
+  line-height: 1;
+  color: var(--brand-black);
+}
+
+.stat-label {
+  color: var(--text-secondary);
+  font-size: 0.8rem;
+  font-weight: 500;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+/* ── Kanban board ───────────────────────── */
+.kanban-board {
+  display: flex;
+  gap: 14px;
+  overflow-x: auto;
+  padding-bottom: 20px;
+  min-height: calc(100vh - 140px);
+}
+
+.kanban-column {
+  flex: 1;
+  min-width: 230px;
+  max-width: 300px;
+}
+
+.kanban-header {
+  padding: 10px 14px;
+  border-radius: 10px 10px 0 0;
+  font-weight: 700;
+  font-size: 0.85rem;
+  text-align: center;
+  color: var(--brand-black);
+  border-bottom: 3px solid;
+}
+
+.kanban-header-draft      { background: #ECE6DC; border-color: #9E9184; }
+.kanban-header-preview    { background: var(--brand-orange-subtle); border-color: var(--brand-orange); color: var(--brand-orange-dark); }
+.kanban-header-revision   { background: #FFF8E1; border-color: #FFA000; }
+.kanban-header-production { background: #E3F2FD; border-color: #1565C0; }
+.kanban-header-delivered  { background: #E8F5E9; border-color: #2E7D32; }
+
+.kanban-cards {
+  background: #ECE6DC;
+  border-radius: 0 0 10px 10px;
+  padding: 8px;
+  min-height: 200px;
+}
+
+.kanban-card {
+  transition: transform 0.15s, box-shadow 0.15s;
+  cursor: pointer;
+  border-radius: 10px !important;
+  border: 1px solid var(--brand-border) !important;
+  background: #fff;
+}
+
+.kanban-card:hover {
+  transform: translateY(-3px);
+  box-shadow: 0 6px 16px rgba(0, 0, 0, 0.12) !important;
+  border-color: var(--brand-orange) !important;
+}
+
+.kanban-thumb {
+  width: 100%;
+  height: 80px;
+  object-fit: cover;
+  border-radius: 8px;
+}
+
+/* ── Status badges ──────────────────────── */
+.badge {
+  border-radius: 50px;
+  font-weight: 600;
+  letter-spacing: 0.2px;
+  padding: 0.4em 0.75em;
+}
+
+.badge-draft      { background: #8D8072; }
+.badge-preview    { background: var(--brand-orange); }
+.badge-revision   { background: #FFA000; color: #241E17; }
+.badge-production { background: #1565C0; }
+.badge-delivered  { background: #2E7D32; }
+
+.badge-inactive {
+  background: var(--brand-gray);
+  color: #fff;
+}
+
+.badge-count {
+  background: transparent;
+  border: 1px solid var(--brand-border);
+  color: var(--text-secondary);
+}
+
+/* ── Buttons ────────────────────────────── */
+.btn-brand {
+  background: var(--brand-orange);
+  border: none;
+  color: #fff;
+  font-weight: 600;
+  border-radius: 8px;
+  padding: 0.45rem 1.2rem;
+  transition: all 0.2s;
+}
+
+.btn-brand:hover {
+  background: var(--brand-orange-dark);
+  color: #fff;
+  box-shadow: 0 4px 12px rgba(245, 124, 0, 0.3);
+}
+
+.btn-brand-outline {
+  background: transparent;
+  border: 2px solid var(--brand-orange);
+  color: var(--brand-orange);
+  font-weight: 600;
+  border-radius: 8px;
+  transition: all 0.2s;
+}
+
+.btn-brand-outline:hover {
+  background: var(--brand-orange);
+  color: #fff;
+}
+
+.btn-dark-brand {
+  background: var(--brand-black);
+  border: none;
+  color: var(--brand-orange-light);
+  font-weight: 600;
+  border-radius: 8px;
+  transition: all 0.2s;
+}
+
+.btn-dark-brand:hover {
+  background: var(--brand-dark);
+  color: var(--brand-orange);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
+}
+
+.btn-success {
+  border-radius: 8px;
+  font-weight: 600;
+}
+
+/* ── List groups ────────────────────────── */
+.list-group-item-action:hover,
+.list-group-item-action:focus {
+  background: var(--brand-orange-glow);
+}
+
+/* ── Progress bar ───────────────────────── */
+.progress {
+  border-radius: 10px;
+  background: var(--brand-border);
+}
+
+.progress-bar-brand {
+  background: linear-gradient(90deg, var(--brand-orange) 0%, var(--brand-orange-dark) 100%);
+}
+
+.progress-bar-danger {
+  background: linear-gradient(90deg, #E53935 0%, #C62828 100%);
+}
+
+/* ── Template select card ───────────────── */
+.template-select-card {
+  display: block;
+  border: 2px solid var(--brand-border);
+  border-radius: 10px;
+  overflow: hidden;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.template-select-card:hover {
+  border-color: var(--brand-orange);
+  box-shadow: 0 4px 12px var(--brand-orange-glow);
+}
+
+.template-select-card.selected,
+.template-select-card:has(input:checked) {
+  border-color: var(--brand-orange);
+  box-shadow: 0 0 0 3px var(--brand-orange-glow);
+}
+
+.template-select-card img {
+  height: 100px;
+  object-fit: cover;
+}
+
+/* ── Client avatars ─────────────────────── */
+.client-avatar {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  background: var(--brand-orange-subtle);
+  color: var(--brand-orange-dark);
+  font-weight: 700;
+  font-size: 0.75rem;
+  margin-right: 8px;
+  vertical-align: middle;
+  flex: 0 0 auto;
+}
+
+/* ── Tables ─────────────────────────────── */
+.table > thead {
+  background: var(--brand-black);
+  color: var(--text-on-dark);
+}
+
+.table > thead th {
+  font-weight: 600;
+  font-size: 0.82rem;
+  text-transform: uppercase;
+  letter-spacing: 0.3px;
+  border: none;
+  padding: 0.75rem 1rem;
+}
+
+.table > tbody > tr:hover {
+  background: var(--brand-orange-glow);
+}
+
+/* ── Disk breakdown ─────────────────────── */
+.disk-row {
+  display: flex;
+  justify-content: space-between;
+  padding: 4px 0;
+  font-size: 0.82rem;
+}
+
+.disk-row + .disk-row {
+  border-top: 1px solid var(--brand-border);
+}
+
+/* ── Timeline / Revisions ───────────────── */
+.revision-item {
+  position: relative;
+  border-left: 3px solid var(--brand-border);
+  padding-left: 14px;
+  margin-bottom: 16px;
+  transition: border-color 0.2s;
+}
+
+.revision-item::before {
+  content: '';
+  position: absolute;
+  left: -7px;
+  top: 2px;
+  width: 11px;
+  height: 11px;
+  border-radius: 50%;
+  background: var(--brand-border);
+  border: 2px solid var(--brand-white);
+}
+
+.revision-item:hover {
+  border-color: var(--brand-orange);
+}
+
+.revision-item.has-feedback {
+  border-color: #FFA000;
+}
+
+.revision-item.has-feedback::before {
+  background: #FFA000;
+}
+
+/* ── Form controls ──────────────────────── */
+.form-control:focus,
+.form-select:focus {
+  border-color: var(--brand-orange);
+  box-shadow: 0 0 0 3px var(--brand-orange-glow);
+}
+
+.form-check-input:checked {
+  background-color: var(--brand-orange);
+  border-color: var(--brand-orange);
+}
+
+/* File inputs (logo upload) — the native "Choose File" button otherwise stays OS-grey */
+input[type="file"].form-control::file-selector-button {
+  background: var(--brand-orange);
+  color: #fff;
+  border: none;
+  border-radius: 6px;
+  padding: 0.35rem 0.9rem;
+  margin: -0.375rem 0.75rem -0.375rem -0.75rem;
+  font-weight: 600;
+  font-size: 0.85rem;
+  transition: background 0.2s;
+}
+
+input[type="file"].form-control::file-selector-button:hover {
+  background: var(--brand-orange-dark);
+}
+
+/* ── Dropdown menus ─────────────────────── */
+.dropdown-menu {
+  border: 1px solid var(--brand-border);
+  border-radius: 10px;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.12);
+}
+
+.dropdown-item:hover,
+.dropdown-item:focus {
+  background: var(--brand-orange-glow);
+  color: var(--brand-black);
+}
+
+/* ── Modals ─────────────────────────────── */
+.modal-content {
+  border-radius: 14px;
+  border-top: 4px solid var(--brand-orange);
+}
+
+/* ── Page header ────────────────────────── */
+.page-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 1.5rem;
+}
+
+.page-header h4 {
+  font-weight: 700;
+  color: var(--brand-black);
+  margin: 0;
+}
+
+/* ── Alerts ─────────────────────────────── */
+.alert {
+  border-radius: 10px;
+}
+
+.alert-brand {
+  background: var(--brand-orange-subtle);
+  border: 1px solid var(--brand-orange);
+  color: var(--brand-orange-dark);
+}
+
+/* Spinner herda a cor da marca em vez do cinza padrao do Bootstrap */
+.spinner-border {
+  color: var(--brand-orange);
+}
+
+/* ── Scrollbar ──────────────────────────── */
+::-webkit-scrollbar {
+  height: 8px;
+  width: 8px;
+}
+
+::-webkit-scrollbar-track {
+  background: var(--brand-light);
+}
+
+::-webkit-scrollbar-thumb {
+  background: var(--brand-kraft);
+  border-radius: 4px;
+  opacity: 0.6;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: var(--brand-orange);
+}
+
+/* ── Responsive ─────────────────────────── */
+@media (max-width: 768px) {
+  .kanban-board {
+    flex-direction: column;
+  }
+  .kanban-column {
+    max-width: 100%;
+  }
+}

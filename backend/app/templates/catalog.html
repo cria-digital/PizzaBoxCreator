@@ -1,0 +1,186 @@
+{% extends "base.html" %}
+{% block title %}Catalogo - Pizza Box Agent{% endblock %}
+
+{% block content %}
+<div class="page-header">
+  <h4><i class="bi bi-grid-3x3-gap" style="color: var(--brand-orange)"></i> Catalogo de Templates</h4>
+  <button class="btn btn-brand btn-sm" data-bs-toggle="modal" data-bs-target="#uploadModal">
+    <i class="bi bi-upload"></i> Upload Template
+  </button>
+</div>
+
+{% if msg %}
+<div class="alert alert-info py-2 px-3 small">{{ msg }}</div>
+{% endif %}
+
+<div class="row g-3">
+  {% for t in templates %}
+  <div class="col-md-4 col-lg-3">
+    <div class="card shadow-sm border-0 h-100 {% if not t.active %}opacity-50{% endif %}">
+      {% if t.thumbnail %}
+      <img src="/api/catalog/{{ t.id }}/thumbnail" class="card-img-top" alt="{{ t.display_name }}"
+           style="height:180px; object-fit:cover;">
+      {% else %}
+      <div class="card-img-top bg-light text-center py-5" style="color: var(--brand-border)">
+        <i class="bi bi-image" style="font-size:3rem"></i>
+      </div>
+      {% endif %}
+      <div class="card-body">
+        <div class="d-flex justify-content-between align-items-start">
+          <h6 class="card-title fw-bold mb-1">{{ t.display_name }}</h6>
+          <div class="dropdown">
+            <button class="btn btn-sm btn-light py-0 px-1" data-bs-toggle="dropdown" aria-expanded="false">
+              <i class="bi bi-three-dots-vertical"></i>
+            </button>
+            <ul class="dropdown-menu dropdown-menu-end shadow-sm">
+              <li>
+                <button class="dropdown-item small" data-bs-toggle="modal"
+                        data-bs-target="#editModal{{ t.id }}">
+                  <i class="bi bi-pencil"></i> Editar dados</button>
+              </li>
+              <li>
+                <form method="POST" action="/catalogo/{{ t.id }}/thumbnail">
+                  <button class="dropdown-item small" type="submit">
+                    <i class="bi bi-arrow-repeat"></i> Regerar thumbnail</button>
+                </form>
+              </li>
+              <li>
+                <form method="POST" action="/catalogo/{{ t.id }}/ativar">
+                  <input type="hidden" name="active" value="{{ 0 if t.active else 1 }}">
+                  <button class="dropdown-item small" type="submit">
+                    {% if t.active %}<i class="bi bi-pause-circle"></i> Desativar
+                    {% else %}<i class="bi bi-play-circle"></i> Ativar{% endif %}</button>
+                </form>
+              </li>
+              <li><hr class="dropdown-divider"></li>
+              <li>
+                <form method="POST" action="/catalogo/{{ t.id }}/excluir"
+                      onsubmit="return confirm('Excluir este template? {% if t.order_count %}Tem pedidos, sera apenas desativado.{% endif %}')">
+                  <button class="dropdown-item small text-danger" type="submit">
+                    <i class="bi bi-trash3"></i> Excluir</button>
+                </form>
+              </li>
+            </ul>
+          </div>
+        </div>
+        <div class="mb-2">
+          <span class="badge" style="background: var(--brand-black); font-size:0.7rem">{{ t.product_type }}</span>
+          {% if t.size_cm %}
+          <span class="badge badge-preview" style="font-size:0.7rem">{{ t.size_cm }}cm</span>
+          {% endif %}
+          {% if not t.active %}
+          <span class="badge badge-inactive" style="font-size:0.7rem">inativo</span>
+          {% endif %}
+          {% if t.order_count %}
+          <span class="badge badge-count" style="font-size:0.7rem">{{ t.order_count }} pedido(s)</span>
+          {% endif %}
+        </div>
+        <div class="small text-muted">
+          <strong>Campos:</strong>
+          {% for f in t.editable_fields %}
+          <span class="d-inline-block border rounded px-1 me-1 mb-1" style="font-size:0.7rem">{{ f.label }}</span>
+          {% endfor %}
+        </div>
+      </div>
+      <div class="card-footer bg-white border-0 pb-3 d-grid gap-2">
+        <a href="/pedidos/novo?template_id={{ t.id }}" class="btn btn-brand-outline btn-sm">
+          <i class="bi bi-plus"></i> Criar Pedido
+        </a>
+        <a href="/catalogo/{{ t.id }}/calibrar" class="btn btn-outline-secondary btn-sm">
+          <i class="bi bi-bullseye"></i> Calibrar campos
+        </a>
+      </div>
+    </div>
+  </div>
+
+  <!-- Edit metadata modal -->
+  <div class="modal fade" id="editModal{{ t.id }}" tabindex="-1">
+    <div class="modal-dialog">
+      <form method="POST" action="/catalogo/{{ t.id }}/editar" class="modal-content">
+        <div class="modal-header border-0">
+          <h5 class="modal-title fw-bold">Editar template</h5>
+          <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+        </div>
+        <div class="modal-body">
+          <div class="mb-3">
+            <label class="form-label fw-semibold">Nome do modelo *</label>
+            <input type="text" name="display_name" class="form-control" required value="{{ t.display_name }}">
+          </div>
+          <div class="row">
+            <div class="col-6 mb-3">
+              <label class="form-label fw-semibold">Tipo</label>
+              <select name="product_type" class="form-select">
+                {% for opt in ["pizza", "hamburger", "sacola"] %}
+                <option value="{{ opt }}" {% if t.product_type == opt %}selected{% endif %}>{{ opt|capitalize }}</option>
+                {% endfor %}
+              </select>
+            </div>
+            <div class="col-6 mb-3">
+              <label class="form-label fw-semibold">Tamanho (cm)</label>
+              <input type="number" name="size_cm" class="form-control" value="{{ t.size_cm or '' }}">
+            </div>
+          </div>
+        </div>
+        <div class="modal-footer border-0">
+          <button type="submit" class="btn btn-brand"><i class="bi bi-save"></i> Salvar</button>
+        </div>
+      </form>
+    </div>
+  </div>
+  {% endfor %}
+
+  {% if not templates %}
+  <div class="col-12 text-center py-5" style="color: var(--brand-border)">
+    <i class="bi bi-inbox" style="font-size:3rem"></i>
+    <p class="text-muted mt-2">Nenhum template. Faca upload de um PSD.</p>
+  </div>
+  {% endif %}
+</div>
+
+<!-- Upload modal -->
+<div class="modal fade" id="uploadModal" tabindex="-1">
+  <div class="modal-dialog">
+    <form method="POST" action="/catalogo/upload" enctype="multipart/form-data" class="modal-content">
+      <div class="modal-header border-0">
+        <h5 class="modal-title fw-bold">Upload de Template PSD</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body">
+        <div class="mb-3">
+          <label class="form-label fw-semibold">Arquivo PSD *</label>
+          <input type="file" name="psd_file" class="form-control" accept=".psd,.psb" required>
+          <div class="form-text">
+            <i class="bi bi-magic"></i> Se o PSD vier achatado da fabrica (CMYK, sem camadas
+            nomeadas), ele e preparado automaticamente: a arte vira fundo e os campos de
+            telefone/instagram/logo sao criados sobre a area reservada. Depois e so ajustar em
+            "Calibrar campos". Arquivos grandes podem levar alguns segundos.
+          </div>
+        </div>
+        <div class="mb-3">
+          <label class="form-label fw-semibold">Nome do modelo *</label>
+          <input type="text" name="display_name" class="form-control" required placeholder="Caixa Pizza 35cm Premium">
+        </div>
+        <div class="row">
+          <div class="col-6 mb-3">
+            <label class="form-label fw-semibold">Tipo</label>
+            <select name="product_type" class="form-select">
+              <option value="pizza">Pizza</option>
+              <option value="hamburger">Hamburger</option>
+              <option value="sacola">Sacola</option>
+            </select>
+          </div>
+          <div class="col-6 mb-3">
+            <label class="form-label fw-semibold">Tamanho (cm)</label>
+            <input type="number" name="size_cm" class="form-control" placeholder="35">
+          </div>
+        </div>
+      </div>
+      <div class="modal-footer border-0">
+        <button type="submit" class="btn btn-brand">
+          <i class="bi bi-upload"></i> Enviar
+        </button>
+      </div>
+    </form>
+  </div>
+</div>
+{% endblock %}

@@ -1,0 +1,309 @@
+{% extends "base.html" %}
+{% block title %}Calibrar {{ template.display_name }} - Pizza Box Agent{% endblock %}
+
+{% block content %}
+<div class="page-header d-flex justify-content-between align-items-center">
+  <div>
+    <h4 class="mb-0"><i class="bi bi-bullseye" style="color: var(--brand-orange)"></i>
+      Calibrar campos — {{ template.display_name }}</h4>
+    <small class="text-muted">Arraste e redimensione cada campo sobre a arte. O texto/logo do
+      cliente vai cair exatamente nestas áreas.</small>
+  </div>
+  <div class="d-flex gap-2">
+    <a href="/catalogo" class="btn btn-outline-secondary btn-sm">
+      <i class="bi bi-arrow-left"></i> Voltar</a>
+    <button id="btnPreview" class="btn btn-outline-secondary btn-sm">
+      <i class="bi bi-eye"></i> Pré-visualizar com exemplo</button>
+    <button id="btnSave" class="btn btn-brand btn-sm">
+      <i class="bi bi-save"></i> Salvar calibração</button>
+  </div>
+</div>
+
+<div class="modal fade" id="previewModal" tabindex="-1">
+  <div class="modal-dialog modal-lg modal-dialog-centered">
+    <div class="modal-content">
+      <div class="modal-header border-0">
+        <h5 class="modal-title fw-bold">Preview com dados de exemplo</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body text-center">
+        <div id="previewSpinner" class="py-5 text-muted">
+          <div class="spinner-border" role="status"></div>
+          <div class="small mt-2">Gerando preview…</div>
+        </div>
+        <img id="previewImg" class="img-fluid d-none" alt="preview" style="border-radius:8px">
+      </div>
+    </div>
+  </div>
+</div>
+
+<div id="saveStatus" class="alert d-none py-2 px-3 small" role="alert"></div>
+
+<div class="row g-3">
+  <div class="col-lg-9">
+    <div id="stage" style="position:relative; display:inline-block; max-width:100%;
+         border:1px solid var(--brand-border); border-radius:8px; overflow:hidden;
+         user-select:none; touch-action:none;">
+      <img id="bg" src="{{ bg_url }}" alt="arte" style="display:block; max-width:100%; height:auto;">
+    </div>
+  </div>
+  <div class="col-lg-3">
+    <div class="card border-0 shadow-sm">
+      <div class="card-body">
+        <h6 class="fw-bold mb-2">Campos</h6>
+        <div id="fieldList" class="small"></div>
+        <hr>
+        <p class="small text-muted mb-1">Dica: clique num campo na lista pra destacá-lo. Use o canto
+          inferior direito de cada caixa pra redimensionar.</p>
+        <p class="small text-muted mb-0">Canvas real: {{ canvas_w }}×{{ canvas_h }} px</p>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+const TEMPLATE_ID = {{ template.id }};
+const CANVAS_W = {{ canvas_w }};
+const CANVAS_H = {{ canvas_h }};
+const BOXES = {{ boxes | tojson }};
+
+const COLORS = {
+  "TEXTO_TELEFONE": "#F57C00",
+  "TEXTO_INSTAGRAM": "#1971c2",
+  "TEXTO_FRASE_OPCIONAL": "#2f9e44",
+  "LOGO_CLIENTE": "#9c36b5",
+};
+// Mirror layers (BASE_2, ...) share their base field's color.
+function baseName(name) { return name.replace(/_\d+$/, ''); }
+function boxColor(name) { return COLORS[baseName(name)] || '#F57C00'; }
+function boxLabel(b) { return b.label || b.name; }
+
+const stage = document.getElementById('stage');
+const bg = document.getElementById('bg');
+const fieldList = document.getElementById('fieldList');
+let scale = 1;            // CSS px per PSD px
+const boxEls = {};        // name -> element
+
+function buildBoxes() {
+  scale = bg.clientWidth / CANVAS_W;
+
+  BOXES.forEach(b => {
+    const el = document.createElement('div');
+    el.className = 'calib-box';
+    el.dataset.name = b.name;
+    el.dataset.fontSize = b.font_size != null ? b.font_size : '';
+    const color = boxColor(b.name);
+    Object.assign(el.style, {
+      position: 'absolute',
+      left:   (b.x * scale) + 'px',
+      top:    (b.y * scale) + 'px',
+      width:  (b.width * scale) + 'px',
+      height: (b.height * scale) + 'px',
+      border: '2px solid ' + color,
+      background: color + '22',
+      boxSizing: 'border-box',
+      cursor: 'move',
+      display: 'flex',
+      alignItems: 'center',
+      overflow: 'hidden',
+    });
+
+    const tag = document.createElement('span');
+    tag.textContent = boxLabel(b);
+    Object.assign(tag.style, {
+      position: 'absolute', top: '-1px', left: '-1px',
+      background: color, color: '#fff', fontSize: '10px',
+      padding: '0 4px', borderRadius: '0 0 4px 0', pointerEvents: 'none',
+    });
+    el.appendChild(tag);
+
+    if (b.kind === 'text') {
+      const preview = document.createElement('span');
+      preview.className = 'txt-preview';
+      preview.textContent = boxLabel(b);
+      Object.assign(preview.style, {
+        color: color, whiteSpace: 'nowrap', paddingLeft: '2px',
+        fontFamily: 'Arial, sans-serif',
+        fontSize: ((b.font_size || 24) * scale) + 'px', lineHeight: '1',
+      });
+      el.appendChild(preview);
+    }
+
+    const handle = document.createElement('div');
+    Object.assign(handle.style, {
+      position: 'absolute', right: '0', bottom: '0',
+      width: '14px', height: '14px', background: color,
+      cursor: 'nwse-resize', borderRadius: '3px 0 0 0',
+    });
+    handle.dataset.handle = '1';
+    el.appendChild(handle);
+
+    stage.appendChild(el);
+    boxEls[b.name] = el;
+  });
+
+  buildFieldList();
+  enableDragResize();
+}
+
+function buildFieldList() {
+  fieldList.innerHTML = '';
+  BOXES.forEach(b => {
+    const color = boxColor(b.name);
+    const row = document.createElement('div');
+    row.className = 'mb-2 d-flex align-items-center gap-2';
+
+    const dot = document.createElement('span');
+    Object.assign(dot.style, { width:'10px', height:'10px', borderRadius:'50%',
+      background: color, display:'inline-block', flex:'0 0 auto' });
+    row.appendChild(dot);
+
+    const name = document.createElement('span');
+    name.textContent = boxLabel(b);
+    name.style.cursor = 'pointer';
+    name.style.flex = '1';
+    name.onclick = () => flash(boxEls[b.name]);
+    row.appendChild(name);
+
+    if (b.kind === 'text') {
+      const inp = document.createElement('input');
+      inp.type = 'number'; inp.min = '6'; inp.value = Math.round(b.font_size || 24);
+      inp.title = 'Tamanho da fonte (px no PSD)';
+      Object.assign(inp.style, { width:'64px' });
+      inp.className = 'form-control form-control-sm';
+      inp.oninput = () => {
+        const el = boxEls[b.name];
+        el.dataset.fontSize = inp.value;
+        const prev = el.querySelector('.txt-preview');
+        if (prev) prev.style.fontSize = (parseFloat(inp.value) * scale) + 'px';
+      };
+      row.appendChild(inp);
+    }
+    fieldList.appendChild(row);
+  });
+}
+
+function flash(el) {
+  el.style.boxShadow = '0 0 0 4px rgba(245,124,0,0.5)';
+  setTimeout(() => el.style.boxShadow = '', 600);
+}
+
+function enableDragResize() {
+  let active = null, mode = null, startX = 0, startY = 0,
+      origL = 0, origT = 0, origW = 0, origH = 0;
+
+  stage.addEventListener('pointerdown', e => {
+    const handle = e.target.dataset.handle;
+    const boxEl = e.target.closest('.calib-box');
+    if (!boxEl) return;
+    active = boxEl;
+    mode = handle ? 'resize' : 'move';
+    startX = e.clientX; startY = e.clientY;
+    origL = parseFloat(boxEl.style.left); origT = parseFloat(boxEl.style.top);
+    origW = parseFloat(boxEl.style.width); origH = parseFloat(boxEl.style.height);
+    boxEl.setPointerCapture(e.pointerId);
+    e.preventDefault();
+  });
+
+  stage.addEventListener('pointermove', e => {
+    if (!active) return;
+    const dx = e.clientX - startX, dy = e.clientY - startY;
+    const maxW = stage.clientWidth, maxH = bg.clientHeight;
+    if (mode === 'move') {
+      active.style.left = Math.max(0, Math.min(maxW - origW, origL + dx)) + 'px';
+      active.style.top  = Math.max(0, Math.min(maxH - origH, origT + dy)) + 'px';
+    } else {
+      active.style.width  = Math.max(16, Math.min(maxW - origL, origW + dx)) + 'px';
+      active.style.height = Math.max(12, Math.min(maxH - origT, origH + dy)) + 'px';
+    }
+  });
+
+  const end = () => { active = null; mode = null; };
+  stage.addEventListener('pointerup', end);
+  stage.addEventListener('pointercancel', end);
+}
+
+function collect() {
+  const out = {};
+  BOXES.forEach(b => {
+    const el = boxEls[b.name];
+    const entry = {
+      x: Math.round(parseFloat(el.style.left) / scale),
+      y: Math.round(parseFloat(el.style.top) / scale),
+      width: Math.round(parseFloat(el.style.width) / scale),
+      height: Math.round(parseFloat(el.style.height) / scale),
+    };
+    if (b.kind === 'text' && el.dataset.fontSize) {
+      entry.font_size = Math.round(parseFloat(el.dataset.fontSize));
+    }
+    out[b.name] = entry;
+  });
+  return out;
+}
+
+document.getElementById('btnPreview').onclick = async () => {
+  const modal = new bootstrap.Modal(document.getElementById('previewModal'));
+  const spinner = document.getElementById('previewSpinner');
+  const img = document.getElementById('previewImg');
+  spinner.classList.remove('d-none');
+  img.classList.add('d-none');
+  modal.show();
+  try {
+    const res = await fetch(`/catalogo/${TEMPLATE_ID}/test-preview`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(collect()),
+    });
+    if (!res.ok) throw new Error('falha ao gerar preview');
+    const blob = await res.blob();
+    img.src = URL.createObjectURL(blob);
+    img.onload = () => { spinner.classList.add('d-none'); img.classList.remove('d-none'); };
+  } catch (err) {
+    spinner.innerHTML = '<div class="text-danger small">Erro: ' + err + '</div>';
+  }
+};
+
+document.getElementById('btnSave').onclick = async () => {
+  const btn = document.getElementById('btnSave');
+  const status = document.getElementById('saveStatus');
+  btn.disabled = true;
+  const original = btn.innerHTML;
+  btn.innerHTML = '<span class="spinner-border spinner-border-sm" role="status"></span> Salvando...';
+  try {
+    const res = await fetch(`/catalogo/${TEMPLATE_ID}/calibrar`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(collect()),
+    });
+    const data = await res.json();
+    status.className = 'alert alert-success py-2 px-3 small';
+    status.textContent = `Calibração salva (${data.saved} campos). Os próximos previews já usam estas posições.`;
+  } catch (err) {
+    status.className = 'alert alert-danger py-2 px-3 small';
+    status.textContent = 'Erro ao salvar: ' + err;
+  } finally {
+    btn.disabled = false;
+    btn.innerHTML = original;
+  }
+  status.classList.remove('d-none');
+};
+
+if (bg.complete) buildBoxes();
+else bg.onload = buildBoxes;
+window.addEventListener('resize', () => {
+  // keep boxes aligned if the image reflows
+  const newScale = bg.clientWidth / CANVAS_W;
+  if (Math.abs(newScale - scale) < 0.0001) return;
+  Object.values(boxEls).forEach(el => {
+    el.style.left   = (parseFloat(el.style.left)   / scale * newScale) + 'px';
+    el.style.top    = (parseFloat(el.style.top)    / scale * newScale) + 'px';
+    el.style.width  = (parseFloat(el.style.width)  / scale * newScale) + 'px';
+    el.style.height = (parseFloat(el.style.height) / scale * newScale) + 'px';
+    const prev = el.querySelector('.txt-preview');
+    if (prev && el.dataset.fontSize)
+      prev.style.fontSize = (parseFloat(el.dataset.fontSize) * newScale) + 'px';
+  });
+  scale = newScale;
+});
+</script>
+{% endblock %}

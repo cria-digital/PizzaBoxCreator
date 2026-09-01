@@ -1,0 +1,219 @@
+{% extends "base.html" %}
+{% block title %}Novo Pedido - Pizza Box Agent{% endblock %}
+
+{% block content %}
+<div class="page-header">
+  <h4><i class="bi bi-plus-circle" style="color: var(--brand-orange)"></i> Novo Pedido</h4>
+</div>
+
+<div class="card shadow-sm border-0 mb-3" style="border-left:4px solid var(--brand-orange) !important">
+  <div class="card-body py-3">
+    <div class="d-flex align-items-center gap-2 flex-wrap">
+      <span class="fw-bold"><i class="bi bi-camera" style="color: var(--brand-orange)"></i>
+        Analisar foto da caixa (IA)</span>
+      <input type="file" id="boxPhoto" accept="image/*" class="form-control form-control-sm" style="max-width:280px">
+      <button type="button" id="analyzeBtn" class="btn btn-brand-outline btn-sm">
+        <i class="bi bi-magic"></i> Analisar</button>
+      <span class="small text-muted">A IA identifica o modelo e lê os dados da caixa pra pré-preencher.</span>
+    </div>
+    <div id="analyzeResult" class="small mt-2"></div>
+  </div>
+</div>
+
+<form method="POST" action="/pedidos/novo" id="orderForm" enctype="multipart/form-data">
+  <div class="row g-4">
+    <!-- Step 1: Client -->
+    <div class="col-md-4">
+      <div class="card shadow-sm border-0">
+        <div class="card-header bg-white fw-bold border-0 pt-3">
+          <span class="badge badge-preview me-1">1</span> Cliente
+        </div>
+        <div class="card-body">
+          <div class="mb-2">
+            <label class="form-label small fw-semibold" style="color: var(--text-secondary)">Buscar por telefone</label>
+            <div class="input-group input-group-sm">
+              <input type="text" name="client_phone" id="clientPhone" class="form-control"
+                     placeholder="(11) 99999-9999" value="{{ prefill_phone or '' }}">
+              <button type="button" class="btn btn-brand"
+                      hx-get="/web/buscar-cliente"
+                      hx-include="#clientPhone"
+                      hx-target="#clientResult">
+                <i class="bi bi-search"></i>
+              </button>
+            </div>
+          </div>
+          <div id="clientResult">
+            {% if client_found %}
+            <div class="alert alert-brand py-2 small mt-2">
+              <strong>{{ client_found.name }}</strong><br>
+              {{ client_found.phone }}
+              {% if client_found.instagram %} | {{ client_found.instagram }}{% endif %}
+              <input type="hidden" name="client_id" value="{{ client_found.id }}">
+            </div>
+            {% endif %}
+          </div>
+          <hr>
+          <p class="small text-muted mb-2">Ou criar novo:</p>
+          <div class="mb-2">
+            <input type="text" name="client_name" class="form-control form-control-sm"
+                   placeholder="Nome da pizzaria" value="{{ prefill_name or '' }}">
+          </div>
+          <div class="mb-2">
+            <input type="text" name="client_instagram" class="form-control form-control-sm"
+                   placeholder="@instagram (opcional)">
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Step 2: Template -->
+    <div class="col-md-4">
+      <div class="card shadow-sm border-0">
+        <div class="card-header bg-white fw-bold border-0 pt-3">
+          <span class="badge badge-preview me-1">2</span> Modelo
+        </div>
+        <div class="card-body">
+          <div class="row g-2">
+            {% for t in templates %}
+            <div class="col-6">
+              <label class="template-select-card {{ 'selected' if selected_template == t.id }}">
+                <input type="radio" name="template_id" value="{{ t.id }}" class="d-none"
+                       {{ 'checked' if selected_template == t.id }}
+                       hx-get="/web/campos-template/{{ t.id }}"
+                       hx-target="#editFields"
+                       hx-trigger="change">
+                {% if t.thumbnail %}
+                <img src="/api/catalog/{{ t.id }}/thumbnail" class="img-fluid" alt="{{ t.display_name }}">
+                {% else %}
+                <div class="bg-light text-center py-3" style="color: var(--brand-border)">
+                  <i class="bi bi-image"></i>
+                </div>
+                {% endif %}
+                <div class="p-1 text-center small fw-semibold">{{ t.display_name }}</div>
+              </label>
+            </div>
+            {% endfor %}
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Step 3: Edit fields -->
+    <div class="col-md-4">
+      <div class="card shadow-sm border-0">
+        <div class="card-header bg-white fw-bold border-0 pt-3">
+          <span class="badge badge-preview me-1">3</span> Dados
+        </div>
+        <div class="card-body">
+          <div class="mb-2">
+            <label class="form-label small mb-0 fw-semibold" style="color: var(--text-secondary)">Quantidade de caixas</label>
+            <input type="number" name="quantidade" min="1" class="form-control form-control-sm"
+                   placeholder="Ex: 1000">
+          </div>
+        </div>
+        <div class="card-body border-top" id="editFields">
+          {% if fields %}
+            {% for field in fields %}
+            <div class="mb-2">
+              <label class="form-label small mb-0 fw-semibold" style="color: var(--text-secondary)">{{ field.label }}</label>
+              {% if field.type == 'choice' %}
+              <select name="field_{{ field.name }}" class="form-select form-select-sm">
+                <option value="">-- Nenhum --</option>
+                {% for opt in field.options or [] %}
+                <option value="{{ opt }}">{{ opt }}</option>
+                {% endfor %}
+              </select>
+              {% elif field.type == 'toggle' %}
+              <div class="form-check form-switch">
+                <input type="checkbox" name="field_{{ field.name }}" value="true" class="form-check-input">
+                <label class="form-check-label small">Ativar</label>
+              </div>
+              {% elif field.type == 'image' %}
+              <input type="file" name="field_{{ field.name }}" class="form-control form-control-sm"
+                     accept="image/*">
+              {% else %}
+              <input type="text" name="field_{{ field.name }}" class="form-control form-control-sm"
+                     placeholder="{{ field.label }}">
+              {% endif %}
+            </div>
+            {% endfor %}
+          {% else %}
+          <p class="text-muted small py-3 text-center">
+            <i class="bi bi-arrow-left"></i> Selecione um modelo
+          </p>
+          {% endif %}
+        </div>
+      </div>
+
+      <button type="submit" class="btn btn-brand w-100 mt-3 py-2">
+        <i class="bi bi-check-circle"></i> Criar Pedido
+      </button>
+    </div>
+  </div>
+</form>
+
+<script>
+(function () {
+  const btn = document.getElementById('analyzeBtn');
+  const out = document.getElementById('analyzeResult');
+
+  function fillField(name, val) {
+    if (!val) return;
+    const el = document.querySelector(`[name="field_${name}"]`);
+    if (el && 'value' in el) el.value = val;
+  }
+
+  function applyAnalysis(d) {
+    const parts = [];
+    if (d.template_name) parts.push(`Modelo sugerido: <strong>${d.template_name}</strong>`);
+    else parts.push('Não identifiquei um modelo do catálogo');
+    if (d.confianca) parts.push(`confiança ${d.confianca}`);
+    const detected = ['telefone', 'instagram', 'frase']
+      .filter(k => d[k]).map(k => `${k}: <strong>${d[k]}</strong>`);
+    out.className = 'small mt-2 text-success';
+    out.innerHTML = parts.join(' · ') + (detected.length ? '<br>Detectado — ' + detected.join(', ') : '');
+
+    if (d.telefone) document.getElementById('clientPhone').value = d.telefone;
+
+    if (d.template_id) {
+      const radio = document.querySelector(`input[name="template_id"][value="${d.template_id}"]`);
+      if (radio) {
+        document.querySelectorAll('.template-select-card.selected')
+          .forEach(c => c.classList.remove('selected'));
+        radio.checked = true;
+        radio.closest('.template-select-card')?.classList.add('selected');
+        const fields = document.getElementById('editFields');
+        fields.addEventListener('htmx:afterSwap', function once() {
+          fillField('telefone', d.telefone);
+          fillField('instagram', d.instagram);
+          fillField('frase', d.frase);
+          fields.removeEventListener('htmx:afterSwap', once);
+        });
+        window.htmx ? htmx.trigger(radio, 'change') : radio.dispatchEvent(new Event('change'));
+      }
+    }
+  }
+
+  btn.onclick = async () => {
+    const file = document.getElementById('boxPhoto').files[0];
+    if (!file) { out.className = 'small mt-2 text-danger'; out.textContent = 'Selecione uma foto primeiro.'; return; }
+    out.className = 'small mt-2 text-muted';
+    out.innerHTML = '<span class="spinner-border spinner-border-sm"></span> Analisando…';
+    try {
+      const fd = new FormData(); fd.append('foto', file);
+      const res = await fetch('/pedidos/analisar-foto', { method: 'POST', body: fd });
+      const data = await res.json();
+      if (!res.ok) {
+        out.className = 'small mt-2 text-danger';
+        out.textContent = data.error || 'Falha ao analisar a foto.';
+        return;
+      }
+      applyAnalysis(data);
+    } catch (err) {
+      out.className = 'small mt-2 text-danger';
+      out.textContent = 'Erro: ' + err;
+    }
+  };
+})();
+</script>
+{% endblock %}

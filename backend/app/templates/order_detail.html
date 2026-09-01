@@ -1,0 +1,229 @@
+{% extends "base.html" %}
+{% block title %}Pedido #{{ order.id }} - Pizza Box Agent{% endblock %}
+
+{% block content %}
+<nav aria-label="breadcrumb" class="mb-3">
+  <ol class="breadcrumb mb-0 small">
+    <li class="breadcrumb-item"><a href="/funil" style="color: var(--brand-orange)">Funil</a></li>
+    <li class="breadcrumb-item active">Pedido #{{ order.id }}</li>
+  </ol>
+</nav>
+
+<div class="row g-4">
+  <!-- Left: Preview -->
+  <div class="col-md-7">
+    <div class="card shadow-sm border-0">
+      <div class="card-header bg-white d-flex justify-content-between align-items-center border-0 pt-3">
+        <span class="fw-bold">Preview</span>
+        <span class="badge badge-{{ order.status.replace('preview_sent','preview') }} px-3 py-2" style="font-size:0.8rem">
+          {{ status_labels.get(order.status, order.status) }}
+        </span>
+      </div>
+      <div class="card-body text-center p-3">
+        {% if wa_error %}
+        <div class="alert alert-warning text-start small" role="alert">
+          <i class="bi bi-exclamation-triangle"></i> Nao foi possivel enviar por WhatsApp: {{ wa_error }}
+        </div>
+        {% endif %}
+        {% if ai_error %}
+        <div class="alert alert-warning text-start small" role="alert">
+          <i class="bi bi-exclamation-triangle"></i> Nao foi possivel gerar o preview por IA: {{ ai_error }}
+        </div>
+        {% endif %}
+        {% if order.preview_jpg %}
+        <img src="/api/orders/{{ order.id }}/preview?t={{ order.updated_at }}"
+             class="img-fluid rounded-3" alt="Preview" style="max-height:480px; box-shadow: 0 4px 20px rgba(0,0,0,0.1);">
+        {% else %}
+        <div class="py-5" style="color: var(--brand-border)">
+          <i class="bi bi-image" style="font-size:4rem"></i>
+          <p class="mt-2 text-muted">Nenhum preview gerado</p>
+        </div>
+        {% endif %}
+      </div>
+
+      <!-- Actions -->
+      <div class="card-footer bg-white border-0 pb-3">
+        <div class="d-flex gap-2 flex-wrap">
+          {% if order.status in ('draft', 'revision', 'preview_sent') %}
+          <form method="POST" action="/pedidos/{{ order.id }}/preview" class="d-inline">
+            <button type="submit" class="btn btn-brand btn-sm">
+              <i class="bi bi-eye"></i> Gerar Preview
+            </button>
+          </form>
+          <form method="POST" action="/pedidos/{{ order.id }}/ai-preview" class="d-inline"
+                onsubmit="this.querySelector('button').disabled=true; this.querySelector('button').innerHTML='<i class=\'bi bi-stars\'></i> Gerando...';">
+            <button type="submit" class="btn btn-dark-brand btn-sm" title="Gera um mockup profissional com IA (Nano Banana) para o cliente aprovar">
+              <i class="bi bi-stars"></i> Preview com IA
+            </button>
+          </form>
+          {% endif %}
+
+          {% if order.status == 'preview_sent' %}
+          <form method="POST" action="/pedidos/{{ order.id }}/approve" class="d-inline">
+            <button type="submit" class="btn btn-success btn-sm">
+              <i class="bi bi-check-lg"></i> Aprovar
+            </button>
+          </form>
+          <button class="btn btn-brand-outline btn-sm" data-bs-toggle="modal" data-bs-target="#rejectModal">
+            <i class="bi bi-arrow-counterclockwise"></i> Pedir Revisao
+          </button>
+          {% endif %}
+
+          {% if order.preview_jpg and whatsapp_enabled %}
+          <form method="POST" action="/pedidos/{{ order.id }}/whatsapp/enviar" class="d-inline">
+            <button type="submit" class="btn btn-brand-outline btn-sm">
+              <i class="bi bi-whatsapp"></i> Enviar por WhatsApp
+            </button>
+          </form>
+          {% endif %}
+
+          {% if order.status == 'production' %}
+          <a href="/api/orders/{{ order.id }}/production" class="btn btn-dark-brand btn-sm">
+            <i class="bi bi-download"></i> Baixar CMYK
+          </a>
+          <form method="POST" action="/pedidos/{{ order.id }}/deliver" class="d-inline">
+            <button type="submit" class="btn btn-success btn-sm">
+              <i class="bi bi-truck"></i> Marcar Entregue
+            </button>
+          </form>
+          {% endif %}
+
+          {% if order.status == 'delivered' %}
+          <a href="/api/orders/{{ order.id }}/production" class="btn btn-dark-brand btn-sm">
+            <i class="bi bi-download"></i> Baixar CMYK
+          </a>
+          <span class="badge badge-delivered px-3 py-2 ms-auto" style="font-size:0.8rem">
+            <i class="bi bi-check-circle"></i> Entregue
+          </span>
+          {% endif %}
+        </div>
+      </div>
+    </div>
+
+    <!-- Revisions -->
+    {% if revisions %}
+    <div class="card shadow-sm border-0 mt-3">
+      <div class="card-header bg-white fw-semibold border-0 pt-3">
+        <i class="bi bi-clock-history" style="color: var(--brand-orange)"></i> Historico ({{ revisions|length }} revisoes)
+      </div>
+      <div class="card-body">
+        {% for rev in revisions|reverse %}
+        <div class="revision-item {{ 'has-feedback' if rev.feedback }}">
+          <div class="fw-semibold small">Revisao #{{ rev.revision_number }}</div>
+          <div class="text-muted" style="font-size:0.72rem">{{ rev.created_at[:16] }}</div>
+          {% if rev.feedback %}
+          <div class="mt-1 small" style="color: #E65100">
+            <i class="bi bi-chat-left-text"></i> "{{ rev.feedback }}"
+          </div>
+          {% endif %}
+        </div>
+        {% endfor %}
+      </div>
+    </div>
+    {% endif %}
+  </div>
+
+  <!-- Right: Info + Edit -->
+  <div class="col-md-5">
+    <div class="card shadow-sm border-0 mb-3">
+      <div class="card-header bg-white fw-semibold border-0 pt-3">
+        <i class="bi bi-person" style="color: var(--brand-orange)"></i> Cliente
+      </div>
+      <div class="card-body pt-2">
+        <div class="fw-bold">{{ client.name }}</div>
+        <div class="text-muted small">{{ client.phone }}</div>
+        {% if client.instagram %}
+        <div class="text-muted small">{{ client.instagram }}</div>
+        {% endif %}
+      </div>
+    </div>
+
+    <div class="card shadow-sm border-0 mb-3">
+      <div class="card-header bg-white fw-semibold border-0 pt-3">
+        <i class="bi bi-grid-3x3-gap" style="color: var(--brand-orange)"></i> Template
+      </div>
+      <div class="card-body pt-2">
+        <div class="fw-bold">{{ template.display_name }}</div>
+        <div class="text-muted small">{{ template.product_type }} | {{ template.size_cm }}cm</div>
+        <div class="small mt-1">
+          <i class="bi bi-boxes" style="color: var(--brand-orange)"></i>
+          Quantidade: <strong>{{ order.quantidade or "nao informada" }}</strong>
+        </div>
+      </div>
+    </div>
+
+    <div class="card shadow-sm border-0">
+      <div class="card-header bg-white fw-semibold border-0 pt-3">
+        <i class="bi bi-pencil-square" style="color: var(--brand-orange)"></i> Dados do Pedido
+      </div>
+      <div class="card-body pt-2">
+        {% if order.status not in ('approved', 'production', 'delivered') %}
+        <form method="POST" action="/pedidos/{{ order.id }}/update" enctype="multipart/form-data">
+          <div class="mb-2">
+            <label class="form-label small mb-0 fw-semibold" style="color: var(--text-secondary)">Quantidade de caixas</label>
+            <input type="number" name="quantidade" min="1" class="form-control form-control-sm"
+                   value="{{ order.quantidade or '' }}">
+          </div>
+          {% for field in editable_fields %}
+          <div class="mb-2">
+            <label class="form-label small mb-0 fw-semibold" style="color: var(--text-secondary)">{{ field.label }}</label>
+            {% if field.type == 'choice' %}
+            <select name="{{ field.name }}" class="form-select form-select-sm">
+              <option value="">-- Nenhum --</option>
+              {% for opt in field.options or [] %}
+              <option value="{{ opt }}" {{ 'selected' if order.edit_data.get(field.name) == opt }}>{{ opt }}</option>
+              {% endfor %}
+            </select>
+            {% elif field.type == 'toggle' %}
+            <div class="form-check form-switch">
+              <input type="checkbox" name="{{ field.name }}" value="true"
+                     class="form-check-input" {{ 'checked' if order.edit_data.get(field.name) }}>
+            </div>
+            {% elif field.type == 'image' %}
+            {% if order.edit_data.get(field.name) %}
+            <div class="form-text mt-0 mb-1"><i class="bi bi-check-circle text-success"></i> Logo ja enviado — escolha outro arquivo pra trocar.</div>
+            {% endif %}
+            <input type="file" name="{{ field.name }}" class="form-control form-control-sm" accept="image/*">
+            {% else %}
+            <input type="text" name="{{ field.name }}" class="form-control form-control-sm"
+                   value="{{ order.edit_data.get(field.name, '') }}">
+            {% endif %}
+          </div>
+          {% endfor %}
+          <button type="submit" class="btn btn-brand-outline btn-sm w-100 mt-2">
+            <i class="bi bi-save"></i> Salvar Dados
+          </button>
+        </form>
+        {% else %}
+        <dl class="mb-0 small">
+          {% for key, val in order.edit_data.items() %}
+          <dt class="text-muted">{{ key }}</dt>
+          <dd class="fw-semibold">{{ val }}</dd>
+          {% endfor %}
+        </dl>
+        {% endif %}
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Reject modal -->
+<div class="modal fade" id="rejectModal" tabindex="-1">
+  <div class="modal-dialog">
+    <form method="POST" action="/pedidos/{{ order.id }}/reject" class="modal-content">
+      <div class="modal-header border-0">
+        <h5 class="modal-title fw-bold">Pedir Revisao</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body">
+        <label class="form-label fw-semibold">O que precisa mudar?</label>
+        <textarea name="feedback" class="form-control" rows="3" required
+                  placeholder="Ex: Quero fundo premium e trocar a frase..."></textarea>
+      </div>
+      <div class="modal-footer border-0">
+        <button type="submit" class="btn btn-brand">Enviar Revisao</button>
+      </div>
+    </form>
+  </div>
+</div>
+{% endblock %}

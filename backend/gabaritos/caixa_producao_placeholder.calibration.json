@@ -1,0 +1,56 @@
+{
+  "TEXTO_FRASE_OPCIONAL": {
+    "x": 1318,
+    "y": 243,
+    "width": 3606,
+    "height": 416,
+    "font_size": 222
+  },
+  "TEXTO_FRASE_OPCIONAL_2": {
+    "x": 7491,
+    "y": 243,
+    "width": 3606,
+    "height": 416,
+    "font_size": 222
+  },
+  "TEXTO_TELEFONE": {
+    "x": 1630,
+    "y": 4959,
+    "width": 2636,
+    "height": 277,
+    "font_size": 166
+  },
+  "TEXTO_TELEFONE_2": {
+    "x": 7803,
+    "y": 4959,
+    "width": 2636,
+    "height": 277,
+    "font_size": 166
+  },
+  "TEXTO_INSTAGRAM": {
+    "x": 1630,
+    "y": 5306,
+    "width": 2636,
+    "height": 222,
+    "font_size": 132
+  },
+  "TEXTO_INSTAGRAM_2": {
+    "x": 7803,
+    "y": 5306,
+    "width": 2636,
+    "height": 222,
+    "font_size": 132
+  },
+  "LOGO_CLIENTE": {
+    "x": 2219,
+    "y": 867,
+    "width": 1803,
+    "height": 1248
+  },
+  "LOGO_CLIENTE_2": {
+    "x": 8392,
+    "y": 867,
+    "width": 1803,
+    "height": 1248
+  }
+}
