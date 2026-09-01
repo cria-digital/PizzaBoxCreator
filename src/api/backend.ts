@@ -39,6 +39,17 @@ type BackendSnapshot = {
   clients: Client[];
 };
 
+export type AuthUser = {
+  id: string;
+  name: string;
+  email: string;
+  role: string;
+};
+
+type AuthResponse = {
+  user: AuthUser;
+};
+
 const API_BASE_URL = normalizeBaseUrl(import.meta.env.VITE_API_BASE_URL);
 
 const statusToStage: Record<ApiOrder["status"], Stage> = {
@@ -62,6 +73,7 @@ function apiUrl(path: string) {
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
   const response = await fetch(apiUrl(path), {
     ...init,
+    credentials: "include",
     headers: {
       "Content-Type": "application/json",
       ...(init?.headers ?? {}),
@@ -70,9 +82,17 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
 
   if (!response.ok) {
     const text = await response.text().catch(() => "");
-    throw new Error(text || `API request failed with ${response.status}`);
+    let message = text;
+    try {
+      const data = JSON.parse(text) as { detail?: string };
+      message = data.detail || message;
+    } catch {
+      // Keep the raw response body when it is not JSON.
+    }
+    throw new Error(message || `API request failed with ${response.status}`);
   }
 
+  if (response.status === 204) return undefined as T;
   return response.json() as Promise<T>;
 }
 
@@ -151,6 +171,28 @@ function preferredTemplate(catalog: ApiCatalogItem[], input: NewOrderInput) {
 
 export const backendApi = {
   enabled: Boolean(API_BASE_URL),
+
+  async login(username: string, password: string): Promise<AuthUser> {
+    if (!API_BASE_URL) throw new Error("VITE_API_BASE_URL is not configured");
+
+    const response = await request<AuthResponse>("/api/auth/login", {
+      method: "POST",
+      body: JSON.stringify({ username, password }),
+    });
+    return response.user;
+  },
+
+  async currentUser(): Promise<AuthUser> {
+    if (!API_BASE_URL) throw new Error("VITE_API_BASE_URL is not configured");
+
+    const response = await request<AuthResponse>("/api/auth/me");
+    return response.user;
+  },
+
+  async logout(): Promise<void> {
+    if (!API_BASE_URL) return;
+    await request<void>("/api/auth/logout", { method: "POST" });
+  },
 
   async loadSnapshot(): Promise<BackendSnapshot> {
     if (!API_BASE_URL) throw new Error("VITE_API_BASE_URL is not configured");

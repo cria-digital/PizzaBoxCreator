@@ -20,28 +20,25 @@ const fieldCls =
 
 export function Login() {
   const { login } = useAppStore();
-  const [email, setEmail] = useState("");
+  const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
   const [show, setShow] = useState(false);
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
 
-  function submit(e: FormEvent) {
+  async function submit(e: FormEvent) {
     e.preventDefault();
     setError("");
-    if (!email || !password) {
-      setError("Preencha e-mail e senha para continuar.");
+    if (!username || !password) {
+      setError("Preencha usuario e senha para continuar.");
       return;
     }
     setLoading(true);
-    setTimeout(() => {
-      if (login(email, password)) {
-        return;
-      } else {
-        setError("E-mail ou senha incorretos. Confira os acessos de demonstração.");
-        setLoading(false);
-      }
-    }, 550);
+    const ok = await login(username, password);
+    if (!ok) {
+      setError("Usuario ou senha incorretos.");
+      setLoading(false);
+    }
   }
 
   return (
@@ -90,16 +87,16 @@ export function Login() {
 
           <form onSubmit={submit} className="mt-8 flex flex-col gap-5" noValidate>
             <div>
-              <label htmlFor="email" className="mb-1.5 block text-sm font-medium text-secondary-foreground">
-                E-mail
+              <label htmlFor="username" className="mb-1.5 block text-sm font-medium text-secondary-foreground">
+                Usuario ou e-mail
               </label>
               <input
-                id="email"
-                type="email"
-                autoComplete="email"
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                placeholder="voce@pizzabox.com.br"
+                id="username"
+                type="text"
+                autoComplete="username"
+                value={username}
+                onChange={(e) => setUsername(e.target.value)}
+                placeholder="admin"
                 className={fieldCls}
               />
             </div>
@@ -146,15 +143,11 @@ export function Login() {
             </Button>
           </form>
 
-          <div className="mt-6 rounded-2xl border border-border bg-secondary/40 p-4">
-            <p className="mb-2 text-xs font-semibold text-secondary-foreground">
-              Acessos de demonstração
+          {!import.meta.env.VITE_API_BASE_URL && (
+            <p className="mt-6 rounded-2xl border border-border bg-secondary/40 p-4 text-xs font-medium text-muted-foreground">
+              Configure VITE_API_BASE_URL para autenticar pelo backend.
             </p>
-            <ul className="flex flex-col gap-1 font-mono text-[11px] leading-relaxed text-muted-foreground">
-              <li>designer@pizzabox.com.br / design123</li>
-              <li>admin@pizzabox.com.br / admin123</li>
-            </ul>
-          </div>
+          )}
         </div>
       </div>
     </div>

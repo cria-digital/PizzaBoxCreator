@@ -18,10 +18,18 @@ const views: Record<ViewId, () => ReactElement> = {
 };
 
 function AppShell() {
-  const { user, logout } = useAppStore();
+  const { user, logout, authLoading } = useAppStore();
   const [view, setView] = useState<ViewId>("painel");
   const [menuOpen, setMenuOpen] = useState(false);
   const Current = views[view];
+
+  if (authLoading) {
+    return (
+      <div className="grid min-h-screen place-items-center bg-card text-sm font-medium text-muted-foreground">
+        Verificando sessão…
+      </div>
+    );
+  }
 
   if (!user) {
     return <Login />;

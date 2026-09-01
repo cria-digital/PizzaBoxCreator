@@ -24,10 +24,6 @@ type User = {
   role: string;
 };
 
-type Account = User & {
-  password: string;
-};
-
 export type NewOrderInput = {
   pizzaria: string;
   city: string;
@@ -47,34 +43,17 @@ type AppStoreValue = {
   orders: Order[];
   clients: Client[];
   backendEnabled: boolean;
+  authLoading: boolean;
   loadingData: boolean;
   dataError: string;
-  login: (email: string, password: string) => boolean;
-  logout: () => void;
+  login: (username: string, password: string) => Promise<boolean>;
+  logout: () => Promise<void>;
   createOrder: (input: NewOrderInput) => Promise<Order>;
   updateOrderStage: (orderId: string, stage: Stage) => void;
   reloadData: () => Promise<void>;
 };
 
 const DATA_KEY = "pizza-box-creator:data:v1";
-const SESSION_KEY = "pizza-box-creator:session:v1";
-
-const ACCOUNTS: Account[] = [
-  {
-    id: "usr_designer",
-    name: "Marina Costa",
-    email: "designer@pizzabox.com.br",
-    password: "design123",
-    role: "Designer",
-  },
-  {
-    id: "usr_admin",
-    name: "Admin Pizza Box",
-    email: "admin@pizzabox.com.br",
-    password: "admin123",
-    role: "Administrador",
-  },
-];
 
 const AppStoreContext = createContext<AppStoreValue | null>(null);
 
@@ -89,10 +68,6 @@ function readJson<T>(key: string, fallback: T): T {
 
 function writeJson<T>(key: string, value: T) {
   window.localStorage.setItem(key, JSON.stringify(value));
-}
-
-function normalizeEmail(email: string) {
-  return email.trim().toLowerCase();
 }
 
 function nextOrderId(orders: Order[]) {
@@ -119,23 +94,12 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
     () => readJson<StoredData>(DATA_KEY, { orders: ORDERS, clients: CLIENTS }),
     [],
   );
-  const initialUser = useMemo(() => {
-    const email = readJson<string | null>(SESSION_KEY, null);
-    const account = email ? ACCOUNTS.find((item) => item.email === email) : undefined;
-    return account
-      ? {
-          id: account.id,
-          name: account.name,
-          email: account.email,
-          role: account.role,
-        }
-      : null;
-  }, []);
 
-  const [user, setUser] = useState<User | null>(initialUser);
+  const [user, setUser] = useState<User | null>(null);
   const [orders, setOrders] = useState<Order[]>(initialData.orders);
   const [clients, setClients] = useState<Client[]>(initialData.clients);
-  const [loadingData, setLoadingData] = useState(backendApi.enabled);
+  const [authLoading, setAuthLoading] = useState(backendApi.enabled);
+  const [loadingData, setLoadingData] = useState(false);
   const [dataError, setDataError] = useState("");
 
   function persist(nextOrders: Order[], nextClients: Client[]) {
@@ -144,7 +108,7 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
   }
 
   async function reloadData() {
-    if (!backendApi.enabled) return;
+    if (!backendApi.enabled || !user) return;
 
     setLoadingData(true);
     setDataError("");
@@ -160,29 +124,56 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
   }
 
   useEffect(() => {
-    void reloadData();
+    if (!backendApi.enabled) {
+      setAuthLoading(false);
+      return;
+    }
+
+    let active = true;
+    backendApi
+      .currentUser()
+      .then((nextUser) => {
+        if (active) setUser(nextUser);
+      })
+      .catch(() => {
+        if (active) setUser(null);
+      })
+      .finally(() => {
+        if (active) setAuthLoading(false);
+      });
+
+    return () => {
+      active = false;
+    };
   }, []);
 
-  function login(email: string, password: string) {
-    const account = ACCOUNTS.find(
-      (item) => item.email === normalizeEmail(email) && item.password === password,
-    );
-    if (!account) return false;
+  useEffect(() => {
+    if (user) {
+      void reloadData();
+    } else {
+      setLoadingData(false);
+    }
+  }, [user]);
 
-    const nextUser = {
-      id: account.id,
-      name: account.name,
-      email: account.email,
-      role: account.role,
-    };
-    setUser(nextUser);
-    writeJson(SESSION_KEY, account.email);
-    return true;
+  async function login(username: string, password: string) {
+    if (!backendApi.enabled) {
+      setDataError("VITE_API_BASE_URL nao configurada");
+      return false;
+    }
+
+    try {
+      const nextUser = await backendApi.login(username, password);
+      setUser(nextUser);
+      return true;
+    } catch (error) {
+      setDataError(error instanceof Error ? error.message : "Falha ao entrar");
+      return false;
+    }
   }
 
-  function logout() {
+  async function logout() {
+    await backendApi.logout().catch(() => undefined);
     setUser(null);
-    window.localStorage.removeItem(SESSION_KEY);
   }
 
   async function createOrder(input: NewOrderInput) {
@@ -253,6 +244,7 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
     orders,
     clients,
     backendEnabled: backendApi.enabled,
+    authLoading,
     loadingData,
     dataError,
     login,
