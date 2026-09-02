@@ -73,6 +73,44 @@ export type AuthUser = {
   role: string;
 };
 
+export type CrmClassification = "new" | "active" | "vip" | "at_risk" | "abandoned" | "inactive";
+export type CrmStage = "lead" | "qualified" | "order_created" | "preview_sent" | "revision" | "approved" | "production" | "delivered";
+
+export type CrmContact = {
+  id: number;
+  client_id: number;
+  classification: CrmClassification;
+  lifecycle_stage: CrmStage;
+  score: number;
+  last_contact_at?: string | null;
+  classification_reason?: string | null;
+  client: ApiClient;
+};
+
+export type CrmMetrics = {
+  contacts_total: number;
+  new_contacts: number;
+  by_classification: Record<CrmClassification, number>;
+  by_stage: Record<CrmStage, number>;
+  stage_clients: Record<CrmStage, number>;
+  conversions: Record<"lead_to_order" | "order_to_preview" | "preview_to_approved" | "approved_to_delivered", number | null>;
+  abandoned_count: number;
+  abandoned_rate: number | null;
+  vip_count: number;
+  reengagement: Record<string, number>;
+};
+
+export type CrmReengagement = {
+  id: number;
+  client_id: number;
+  order_id?: number | null;
+  client_name: string;
+  client_phone: string;
+  reason: string;
+  status: "pending" | "sent" | "skipped" | "failed";
+  scheduled_for?: string | null;
+};
+
 type AuthResponse = {
   user: AuthUser;
 };
@@ -441,5 +479,30 @@ export const backendApi = {
   async deleteClient(clientId: number): Promise<void> {
     if (!API_BASE_URL) throw new Error("VITE_API_BASE_URL is not configured");
     await request<void>(`/api/clients/${clientId}`, { method: "DELETE" });
+  },
+
+  async loadCrm(): Promise<{ contacts: CrmContact[]; metrics: CrmMetrics; tasks: CrmReengagement[] }> {
+    if (!API_BASE_URL) throw new Error("VITE_API_BASE_URL is not configured");
+    const [contacts, metrics, tasks] = await Promise.all([
+      request<CrmContact[]>("/api/crm/contacts"),
+      request<CrmMetrics>("/api/crm/metrics"),
+      request<CrmReengagement[]>("/api/crm/reengagement?status=pending"),
+    ]);
+    return { contacts, metrics, tasks };
+  },
+
+  async reclassifyCrm(): Promise<void> {
+    await request("/api/crm/reclassify", { method: "POST" });
+  },
+
+  async markReengagementSent(taskId: number): Promise<void> {
+    await request(`/api/crm/reengagement/${taskId}/send`, { method: "POST" });
+  },
+
+  async skipReengagement(taskId: number): Promise<void> {
+    await request(`/api/crm/reengagement/${taskId}/skip`, {
+      method: "POST",
+      body: JSON.stringify({ note: "Ignorado pelo operador" }),
+    });
   },
 };

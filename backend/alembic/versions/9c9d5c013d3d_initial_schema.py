@@ -45,14 +45,15 @@ def upgrade() -> None:
         sa.Column("created_at", sa.DateTime(timezone=True), server_default=sa.func.now(), nullable=False),
     )
 
-    op.execute("""
-        DO $$ BEGIN
-            CREATE TYPE order_status AS ENUM (
-                'draft', 'preview_sent', 'revision', 'approved', 'production', 'delivered'
-            );
-        EXCEPTION WHEN duplicate_object THEN null;
-        END $$;
-    """)
+    if op.get_bind().dialect.name == "postgresql":
+        op.execute("""
+            DO $$ BEGIN
+                CREATE TYPE order_status AS ENUM (
+                    'draft', 'preview_sent', 'revision', 'approved', 'production', 'delivered'
+                );
+            EXCEPTION WHEN duplicate_object THEN null;
+            END $$;
+        """)
 
     op.create_table(
         "orders",
@@ -81,8 +82,8 @@ def upgrade() -> None:
         sa.Column("preview_source", sa.String, nullable=False, server_default="psd"),
         sa.Column("feedback", sa.String, nullable=True),
         sa.Column("created_at", sa.DateTime(timezone=True), server_default=sa.func.now(), nullable=False),
+        sa.UniqueConstraint("order_id", "revision_number", name="uq_order_revision"),
     )
-    op.create_unique_constraint("uq_order_revision", "order_revisions", ["order_id", "revision_number"])
     op.create_index("ix_revisions_order", "order_revisions", ["order_id"])
 
     op.create_table(
@@ -93,26 +94,25 @@ def upgrade() -> None:
     )
     op.create_index("ix_wa_messages_order", "whatsapp_messages", ["order_id"])
 
-    op.execute("""
-        CREATE TABLE admin_account (
-            id SERIAL PRIMARY KEY,
-            username VARCHAR NOT NULL UNIQUE,
-            password_hash VARCHAR NOT NULL,
-            updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
-        )
-    """)
+    op.create_table(
+        "admin_account",
+        sa.Column("id", sa.Integer, primary_key=True, autoincrement=True),
+        sa.Column("username", sa.String, nullable=False, unique=True),
+        sa.Column("password_hash", sa.String, nullable=False),
+        sa.Column("updated_at", sa.DateTime(timezone=True), server_default=sa.func.now(), nullable=False),
+    )
 
-    op.execute("""
-        CREATE TABLE whatsapp_config (
-            id INTEGER PRIMARY KEY CHECK (id = 1),
-            token VARCHAR,
-            phone_number_id VARCHAR,
-            verify_token VARCHAR,
-            app_secret VARCHAR,
-            api_version VARCHAR NOT NULL DEFAULT 'v21.0',
-            updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
-        )
-    """)
+    op.create_table(
+        "whatsapp_config",
+        sa.Column("id", sa.Integer, primary_key=True),
+        sa.Column("token", sa.String, nullable=True),
+        sa.Column("phone_number_id", sa.String, nullable=True),
+        sa.Column("verify_token", sa.String, nullable=True),
+        sa.Column("app_secret", sa.String, nullable=True),
+        sa.Column("api_version", sa.String, nullable=False, server_default="v21.0"),
+        sa.Column("updated_at", sa.DateTime(timezone=True), server_default=sa.func.now(), nullable=False),
+        sa.CheckConstraint("id = 1", name="wa_config_single_row"),
+    )
 
 
 def downgrade() -> None:
@@ -121,7 +121,8 @@ def downgrade() -> None:
     op.drop_index("ix_wa_messages_order", table_name="whatsapp_messages")
     op.drop_table("whatsapp_messages")
     op.drop_index("ix_revisions_order", table_name="order_revisions")
-    op.drop_constraint("uq_order_revision", "order_revisions", type_="unique")
+    if op.get_bind().dialect.name != "sqlite":
+        op.drop_constraint("uq_order_revision", "order_revisions", type_="unique")
     op.drop_table("order_revisions")
     op.drop_index("ix_orders_status", table_name="orders")
     op.drop_index("ix_orders_client", table_name="orders")

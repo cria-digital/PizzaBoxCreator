@@ -65,6 +65,14 @@ class Settings(BaseSettings):
     sqlite_busy_timeout: int = 5000  # ms
     login_max_attempts: int = 5
     login_lockout_seconds: int = 300
+    crm_vip_delivered_orders: int = 3
+    crm_vip_boxes: int = 5000
+    crm_vip_window_days: int = 365
+    crm_at_risk_days: int = 7
+    crm_abandoned_days: int = 14
+    crm_active_days: int = 30
+    crm_inactive_days: int = 90
+    crm_rule_version: str = "crm-v1"
 
     meta_whatsapp_token: str = ""
     meta_phone_number_id: str = ""

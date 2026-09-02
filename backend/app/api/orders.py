@@ -77,8 +77,15 @@ def create_order(data: OrderCreate, request: Request, db: Session = Depends(get_
         edit_data.update(_parse_message(data.message))
 
     user = get_current_user(request) or "system"
-    order = repo.order_create(db, client_id, data.template_id, edit_data, data.quantidade,
-                              created_by=user)
+    order = repo.order_create(
+        db,
+        client_id,
+        data.template_id,
+        edit_data,
+        data.quantidade,
+        created_by=user,
+        source="api",
+    )
     repo.audit_log(db, user, "order_created", order_id=order["id"],
                    details={"template_id": data.template_id})
 
@@ -205,7 +212,13 @@ def reject(order_id: int, body: RejectBody, request: Request, db: Session = Depe
         db.commit()
 
     user = get_current_user(request) or "system"
-    order = repo.order_update_status(db, order_id, OrderStatus.revision.value)
+    order = repo.order_update_status(
+        db,
+        order_id,
+        OrderStatus.revision.value,
+        source="api",
+        actor=user,
+    )
     repo.audit_log(db, user, "order_rejected", order_id=order_id,
                    details={"feedback": body.feedback})
     return build_order_response(order, db)
@@ -218,10 +231,17 @@ def update_status(order_id: int, body: StatusUpdate, request: Request, db: Sessi
         raise HTTPException(404, "Pedido nao encontrado")
 
     old_status = order["status"]
-    order = repo.order_update_status(db, order_id, body.status.value)
+    user = get_current_user(request) or "system"
+    order = repo.order_update_status(
+        db,
+        order_id,
+        body.status.value,
+        source="api",
+        actor=user,
+    )
     repo.audit_log(
         db,
-        get_current_user(request) or "system",
+        user,
         "order_status_updated",
         order_id=order_id,
         details={"from": old_status, "to": body.status.value},

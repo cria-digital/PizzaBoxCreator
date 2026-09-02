@@ -7,12 +7,14 @@ import { Clientes } from "./views/Clientes";
 import { Arquivos } from "./views/Arquivos";
 import { PreImpressao } from "./views/PreImpressao";
 import { Login } from "./views/Login";
+import { FunilCrm } from "./views/FunilCrm";
 import { AppStoreProvider, useAppStore } from "./store/AppStore";
 
 const views: Record<ViewId, () => ReactElement> = {
   painel: Dashboard,
   pedidos: Pedidos,
   clientes: Clientes,
+  funil: FunilCrm,
   arquivos: Arquivos,
   preimpressao: PreImpressao,
 };

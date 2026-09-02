@@ -24,10 +24,9 @@ def upgrade() -> None:
         return
 
     conn = op.get_bind()
-    has_col = conn.execute(sa.text(
-        "SELECT 1 FROM information_schema.columns "
-        "WHERE table_name = 'order_revisions' AND column_name = 'preview_source'"
-    )).scalar()
+    has_col = "preview_source" in {
+        col["name"] for col in sa.inspect(conn).get_columns("order_revisions")
+    }
     if not has_col:
         op.add_column(
             "order_revisions",

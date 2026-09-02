@@ -26,6 +26,7 @@ from app.print_specs.pilot_config import (
 )
 from app.services.logo_service import prepare_logo
 from app.services.order_service import approve_order, generate_order_preview
+from app.services import crm_service
 from app.utils.phone import normalize_phone
 
 logger = logging.getLogger(__name__)
@@ -107,12 +108,42 @@ def _process_message(db, msg: dict, contact_name: str | None, phone: str) -> int
 
     if not client:
         client = repo.client_create(db, contact_name or "Cliente WhatsApp", phone)
+        crm_service.record_interaction(
+            db,
+            client_id=client["id"],
+            channel="whatsapp",
+            direction="inbound",
+            event_type="message_received",
+            payload={"message_type": msg.get("type")},
+            idempotency_key=f"wa:{msg.get('id')}:inbound",
+            classify=True,
+        )
         if _should_start_ai_pilot(msg, text):
             return _start_ai_pilot_order(db, client, phone, msg, text)
         _send_catalog(db, phone)
+        crm_service.record_interaction(
+            db,
+            client_id=client["id"],
+            channel="whatsapp",
+            direction="outbound",
+            event_type="catalog_sent",
+            idempotency_key=f"wa:{msg.get('id')}:catalog",
+            classify=True,
+        )
         return None
 
     order = repo.order_get_active_for_client(db, client["id"])
+    crm_service.record_interaction(
+        db,
+        client_id=client["id"],
+        order_id=order["id"] if order else None,
+        channel="whatsapp",
+        direction="inbound",
+        event_type="message_received",
+        payload={"message_type": msg.get("type")},
+        idempotency_key=f"wa:{msg.get('id')}:inbound",
+        classify=True,
+    )
 
     if not order:
         if _should_start_ai_pilot(msg, text):
@@ -149,7 +180,17 @@ def _handle_template_selection(db, client: dict, phone: str, msg: dict) -> int |
         _send_catalog(db, phone)
         return None
 
-    order = repo.order_create(db, client["id"], template["id"], {})
+    order = repo.order_create(db, client["id"], template["id"], {}, source="whatsapp")
+    crm_service.record_interaction(
+        db,
+        client_id=client["id"],
+        order_id=order["id"],
+        channel="whatsapp",
+        direction="inbound",
+        event_type="model_selected",
+        payload={"template_id": template["id"]},
+        classify=True,
+    )
     _send_text(
         phone,
         f"Pedido criado para {template['display_name']}! Agora me conta: quantas caixas voce quer "
@@ -184,6 +225,7 @@ def _start_ai_pilot_order(
         template["id"],
         edit_data,
         created_by="whatsapp_ai",
+        source="whatsapp",
     )
 
     if text:

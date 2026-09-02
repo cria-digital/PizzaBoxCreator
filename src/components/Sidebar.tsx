@@ -7,6 +7,7 @@ export type ViewId =
   | "painel"
   | "pedidos"
   | "clientes"
+  | "funil"
   | "arquivos"
   | "preimpressao";
 
@@ -14,6 +15,7 @@ const primary: { id: ViewId; label: string; icon: IconName; badge?: string }[] =
   { id: "painel", label: "Painel", icon: "grid" },
   { id: "pedidos", label: "Pedidos", icon: "box" },
   { id: "clientes", label: "Clientes & CRM", icon: "users" },
+  { id: "funil", label: "Funil CRM", icon: "filter" },
   { id: "arquivos", label: "Arquivos PSD", icon: "layers" },
   { id: "preimpressao", label: "Pré-impressão", icon: "printer" },
 ];
