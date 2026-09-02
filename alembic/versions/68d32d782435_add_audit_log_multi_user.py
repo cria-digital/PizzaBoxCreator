@@ -43,33 +43,31 @@ def upgrade() -> None:
 
     # Allow multiple admin users (remove single-row constraint if it exists).
     conn = op.get_bind()
-    constraints = conn.execute(sa.text(
-        "SELECT conname FROM pg_constraint "
-        "WHERE conrelid = 'admin_account'::regclass AND contype = 'c'"
-    )).scalars().all()
-    for constraint_name in constraints:
-        op.drop_constraint(constraint_name, 'admin_account', type_='check')
+    inspector = sa.inspect(conn)
+    dialect = conn.dialect.name
 
-    has_unique_username = conn.execute(sa.text(
-        "SELECT 1 FROM pg_indexes WHERE tablename = 'admin_account' "
-        "AND indexdef ILIKE '%UNIQUE%' AND indexdef ILIKE '%username%'"
-    )).scalar()
-    if not has_unique_username:
-        op.create_unique_constraint('uq_admin_account_username', 'admin_account', ['username'])
+    if dialect == "postgresql":
+        constraints = conn.execute(sa.text(
+            "SELECT conname FROM pg_constraint "
+            "WHERE conrelid = 'admin_account'::regclass AND contype = 'c'"
+        )).scalars().all()
+        for constraint_name in constraints:
+            op.drop_constraint(constraint_name, 'admin_account', type_='check')
+
+        has_unique_username = conn.execute(sa.text(
+            "SELECT 1 FROM pg_indexes WHERE tablename = 'admin_account' "
+            "AND indexdef ILIKE '%UNIQUE%' AND indexdef ILIKE '%username%'"
+        )).scalar()
+        if not has_unique_username:
+            op.create_unique_constraint('uq_admin_account_username', 'admin_account', ['username'])
 
     # Track who created each order (idempotent).
-    has_col = conn.execute(sa.text(
-        "SELECT 1 FROM information_schema.columns "
-        "WHERE table_name = 'orders' AND column_name = 'created_by'"
-    )).scalar()
+    has_col = "created_by" in {col["name"] for col in inspector.get_columns("orders")}
     if not has_col:
         op.add_column('orders', sa.Column('created_by', sa.String(), nullable=True))
 
     # Audit log: immutable record of who did what and when (idempotent).
-    has_table = conn.execute(sa.text(
-        "SELECT 1 FROM information_schema.tables WHERE table_name = 'audit_log'"
-    )).scalar()
-    if not has_table:
+    if "audit_log" not in set(inspector.get_table_names()):
         op.create_table(
             'audit_log',
             sa.Column('id', sa.Integer(), primary_key=True, autoincrement=True),

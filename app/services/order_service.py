@@ -277,6 +277,15 @@ def approve_order(order_id: int, db: Session) -> tuple[dict, list[str]]:
     """
     order = repo.order_get(db, order_id)
     template = repo.template_get(db, order["template_id"])
+    from app.services.crm_service import record_order_status_change
+    record_order_status_change(
+        db,
+        order_id=order_id,
+        client_id=order["client_id"],
+        from_status=order["status"],
+        to_status=OrderStatus.approved.value,
+        source="system",
+    )
 
     # Generate the production package (designer deliverable).
     from app.services.production_package import build_production_package

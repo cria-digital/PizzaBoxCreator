@@ -2,15 +2,23 @@
 
 from __future__ import annotations
 
-from sqlalchemy import func, select, update, delete
+from datetime import datetime
+
+from sqlalchemy import and_, func, or_, select, update, delete
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from app.db.models import (
     AdminAccount,
     Client,
+    CrmClassificationEvent,
+    CrmInteraction,
+    CrmProfile,
+    CrmReengagementTask,
     Order,
     OrderRevision,
+    OrderStatusEvent,
+    ReengagementStatus,
     Template,
     WhatsAppConfig,
     WhatsAppMessage,
@@ -33,7 +41,20 @@ def client_create(db: Session, name: str, phone: str,
     db.add(client)
     db.commit()
     db.refresh(client)
-    return _client_to_dict(client)
+    created = _client_to_dict(client)
+    from app.services.crm_service import ensure_profile, record_interaction
+    ensure_profile(db, created["id"], classify=False)
+    record_interaction(
+        db,
+        client_id=created["id"],
+        channel="api",
+        direction="internal",
+        event_type="contact_created",
+        payload={"source": "client_create"},
+        idempotency_key=f"crm:client:{created['id']}:created",
+        classify=True,
+    )
+    return created
 
 
 def client_upsert(db: Session, name: str, phone: str,
@@ -48,8 +69,12 @@ def client_upsert(db: Session, name: str, phone: str,
         if logo_path is not None:
             fields["logo_path"] = logo_path
         if fields:
-            return client_update(db, existing["id"], **fields)
-        return existing
+            updated = client_update(db, existing["id"], **fields)
+        else:
+            updated = existing
+        from app.services.crm_service import ensure_profile
+        ensure_profile(db, updated["id"])
+        return updated
     return client_create(db, name, phone, instagram, logo_path)
 
 
@@ -78,7 +103,20 @@ def client_update(db: Session, client_id: int, **fields) -> dict:
     except IntegrityError:
         db.rollback()
         raise
-    return client_get(db, client_id)
+    updated = client_get(db, client_id)
+    if updated:
+        from app.services.crm_service import ensure_profile, record_interaction
+        ensure_profile(db, client_id, classify=False)
+        record_interaction(
+            db,
+            client_id=client_id,
+            channel="api",
+            direction="internal",
+            event_type="contact_updated",
+            payload={"fields": sorted(fields.keys())},
+            classify=True,
+        )
+    return updated
 
 
 def client_order_count(db: Session, client_id: int) -> int:
@@ -87,6 +125,10 @@ def client_order_count(db: Session, client_id: int) -> int:
 
 
 def client_delete(db: Session, client_id: int) -> None:
+    db.execute(delete(CrmReengagementTask).where(CrmReengagementTask.client_id == client_id))
+    db.execute(delete(CrmClassificationEvent).where(CrmClassificationEvent.client_id == client_id))
+    db.execute(delete(CrmInteraction).where(CrmInteraction.client_id == client_id))
+    db.execute(delete(CrmProfile).where(CrmProfile.client_id == client_id))
     stmt = delete(Client).where(Client.id == client_id)
     db.execute(stmt)
     db.commit()
@@ -221,7 +263,8 @@ def _template_to_dict(tmpl: Template) -> dict:
 
 def order_create(db: Session, client_id: int, template_id: int,
                  edit_data: dict | None = None, quantidade: int | None = None,
-                 created_by: str | None = None) -> dict:
+                 created_by: str | None = None,
+                 source: str = "system") -> dict:
     order = Order(
         client_id=client_id,
         template_id=template_id,
@@ -232,7 +275,16 @@ def order_create(db: Session, client_id: int, template_id: int,
     db.add(order)
     db.commit()
     db.refresh(order)
-    return _order_to_dict(order)
+    created = _order_to_dict(order)
+    from app.services.crm_service import record_order_created
+    record_order_created(
+        db,
+        order_id=created["id"],
+        client_id=client_id,
+        source=source,
+        actor=created_by,
+    )
+    return created
 
 
 def order_get(db: Session, order_id: int) -> dict | None:
@@ -256,11 +308,31 @@ def order_update_quantidade(db: Session, order_id: int, quantidade: int) -> dict
     return order_get(db, order_id)
 
 
-def order_update_status(db: Session, order_id: int, status: str) -> dict:
+def order_update_status(
+    db: Session,
+    order_id: int,
+    status: str,
+    *,
+    source: str = "system",
+    actor: str | None = None,
+) -> dict:
+    current = order_get(db, order_id)
     stmt = update(Order).where(Order.id == order_id).values(status=status)
     db.execute(stmt)
     db.commit()
-    return order_get(db, order_id)
+    updated = order_get(db, order_id)
+    if current and updated and current["status"] != status:
+        from app.services.crm_service import record_order_status_change
+        record_order_status_change(
+            db,
+            order_id=order_id,
+            client_id=updated["client_id"],
+            from_status=current["status"],
+            to_status=status,
+            source=source,
+            actor=actor,
+        )
+    return updated
 
 
 def order_set_paths(db: Session, order_id: int,
@@ -533,3 +605,406 @@ def audit_log_list(db: Session, order_id: int | None = None,
         }
         for e in db.scalars(stmt).all()
     ]
+
+
+# ---------------------------------------------------------------------------
+# CRM
+# ---------------------------------------------------------------------------
+
+def crm_profile_get(db: Session, client_id: int) -> dict | None:
+    profile = db.scalar(select(CrmProfile).where(CrmProfile.client_id == client_id))
+    return _crm_profile_to_dict(profile) if profile else None
+
+
+def crm_profile_ensure(db: Session, client_id: int) -> dict:
+    profile = db.scalar(select(CrmProfile).where(CrmProfile.client_id == client_id))
+    if profile:
+        return _crm_profile_to_dict(profile)
+    profile = CrmProfile(client_id=client_id)
+    db.add(profile)
+    try:
+        db.commit()
+    except IntegrityError:
+        db.rollback()
+        profile = db.scalar(select(CrmProfile).where(CrmProfile.client_id == client_id))
+        if profile:
+            return _crm_profile_to_dict(profile)
+        raise
+    db.refresh(profile)
+    return _crm_profile_to_dict(profile)
+
+
+def crm_profile_update(db: Session, client_id: int, **fields) -> dict:
+    profile = db.scalar(select(CrmProfile).where(CrmProfile.client_id == client_id))
+    if not profile:
+        profile = CrmProfile(client_id=client_id)
+        db.add(profile)
+        db.flush()
+    for key, value in fields.items():
+        setattr(profile, key, value)
+    db.commit()
+    db.refresh(profile)
+    return _crm_profile_to_dict(profile)
+
+
+def crm_interaction_create(
+    db: Session,
+    *,
+    client_id: int,
+    event_type: str,
+    channel: str,
+    direction: str,
+    order_id: int | None = None,
+    payload: dict | None = None,
+    occurred_at: datetime | None = None,
+    idempotency_key: str | None = None,
+) -> dict:
+    if idempotency_key:
+        existing = db.scalar(
+            select(CrmInteraction).where(CrmInteraction.idempotency_key == idempotency_key)
+        )
+        if existing:
+            return _crm_interaction_to_dict(existing)
+
+    interaction = CrmInteraction(
+        client_id=client_id,
+        order_id=order_id,
+        channel=channel,
+        direction=direction,
+        event_type=event_type,
+        payload=payload or {},
+        occurred_at=occurred_at or datetime.utcnow(),
+        idempotency_key=idempotency_key,
+    )
+    db.add(interaction)
+    try:
+        db.commit()
+    except IntegrityError:
+        db.rollback()
+        if idempotency_key:
+            existing = db.scalar(
+                select(CrmInteraction).where(CrmInteraction.idempotency_key == idempotency_key)
+            )
+            if existing:
+                return _crm_interaction_to_dict(existing)
+        raise
+    db.refresh(interaction)
+    return _crm_interaction_to_dict(interaction)
+
+
+def crm_interaction_list(db: Session, client_id: int, limit: int = 100) -> list[dict]:
+    stmt = (
+        select(CrmInteraction)
+        .where(CrmInteraction.client_id == client_id)
+        .order_by(CrmInteraction.occurred_at.desc())
+        .limit(limit)
+    )
+    return [_crm_interaction_to_dict(i) for i in db.scalars(stmt)]
+
+
+def crm_interaction_last_at(db: Session, client_id: int) -> datetime | None:
+    return db.scalar(
+        select(func.max(CrmInteraction.occurred_at))
+        .where(CrmInteraction.client_id == client_id)
+    )
+
+
+def crm_classification_event_create(
+    db: Session,
+    *,
+    client_id: int,
+    previous_classification: str | None,
+    new_classification: str,
+    reason: str,
+    evidence: dict,
+    rule_version: str,
+) -> dict:
+    event = CrmClassificationEvent(
+        client_id=client_id,
+        previous_classification=previous_classification,
+        new_classification=new_classification,
+        reason=reason,
+        evidence=evidence,
+        rule_version=rule_version,
+    )
+    db.add(event)
+    db.commit()
+    db.refresh(event)
+    return _crm_classification_event_to_dict(event)
+
+
+def crm_classification_event_list(db: Session, client_id: int, limit: int = 100) -> list[dict]:
+    stmt = (
+        select(CrmClassificationEvent)
+        .where(CrmClassificationEvent.client_id == client_id)
+        .order_by(CrmClassificationEvent.created_at.desc(), CrmClassificationEvent.id.desc())
+        .limit(limit)
+    )
+    return [_crm_classification_event_to_dict(e) for e in db.scalars(stmt)]
+
+
+def crm_reengagement_pending_get(
+    db: Session,
+    *,
+    client_id: int,
+    reason: str,
+    order_id: int | None = None,
+) -> dict | None:
+    stmt = (
+        select(CrmReengagementTask)
+        .where(CrmReengagementTask.client_id == client_id)
+        .where(CrmReengagementTask.reason == reason)
+        .where(CrmReengagementTask.status == ReengagementStatus.pending)
+    )
+    if order_id is None:
+        stmt = stmt.where(CrmReengagementTask.order_id.is_(None))
+    else:
+        stmt = stmt.where(CrmReengagementTask.order_id == order_id)
+    task = db.scalar(stmt)
+    return _crm_reengagement_task_to_dict(task) if task else None
+
+
+def crm_reengagement_create(
+    db: Session,
+    *,
+    client_id: int,
+    reason: str,
+    scheduled_for: datetime,
+    order_id: int | None = None,
+) -> dict:
+    existing = crm_reengagement_pending_get(
+        db, client_id=client_id, reason=reason, order_id=order_id
+    )
+    if existing:
+        return existing
+    task = CrmReengagementTask(
+        client_id=client_id,
+        order_id=order_id,
+        reason=reason,
+        scheduled_for=scheduled_for,
+    )
+    db.add(task)
+    db.commit()
+    db.refresh(task)
+    return _crm_reengagement_task_to_dict(task)
+
+
+def crm_reengagement_list(
+    db: Session,
+    *,
+    status: str | None = None,
+    client_id: int | None = None,
+    limit: int = 100,
+    offset: int = 0,
+) -> list[dict]:
+    stmt = (
+        select(CrmReengagementTask, Client.name.label("client_name"), Client.phone.label("client_phone"))
+        .join(Client, CrmReengagementTask.client_id == Client.id)
+        .order_by(CrmReengagementTask.scheduled_for.asc())
+        .limit(limit)
+        .offset(offset)
+    )
+    if status:
+        stmt = stmt.where(CrmReengagementTask.status == status)
+    if client_id:
+        stmt = stmt.where(CrmReengagementTask.client_id == client_id)
+    rows = db.execute(stmt).all()
+    items = []
+    for task, client_name, client_phone in rows:
+        item = _crm_reengagement_task_to_dict(task)
+        item["client_name"] = client_name
+        item["client_phone"] = client_phone
+        items.append(item)
+    return items
+
+
+def crm_reengagement_get(db: Session, task_id: int) -> dict | None:
+    task = db.get(CrmReengagementTask, task_id)
+    return _crm_reengagement_task_to_dict(task) if task else None
+
+
+def crm_reengagement_update(db: Session, task_id: int, **fields) -> dict | None:
+    task = db.get(CrmReengagementTask, task_id)
+    if not task:
+        return None
+    for key, value in fields.items():
+        setattr(task, key, value)
+    db.commit()
+    db.refresh(task)
+    return _crm_reengagement_task_to_dict(task)
+
+
+def crm_reengagement_skip_pending_for_client(
+    db: Session,
+    *,
+    client_id: int,
+    reason_prefixes: tuple[str, ...] = ("at_risk", "abandoned", "inactive"),
+    note: str = "Cliente recuperado por nova atividade",
+) -> int:
+    stmt = (
+        select(CrmReengagementTask)
+        .where(CrmReengagementTask.client_id == client_id)
+        .where(CrmReengagementTask.status == ReengagementStatus.pending)
+    )
+    tasks = list(db.scalars(stmt))
+    changed = 0
+    for task in tasks:
+        if task.reason.startswith(reason_prefixes):
+            task.status = ReengagementStatus.skipped
+            task.last_error = note
+            changed += 1
+    if changed:
+        db.commit()
+    return changed
+
+
+def order_status_event_create(
+    db: Session,
+    *,
+    order_id: int,
+    to_status: str,
+    from_status: str | None = None,
+    source: str = "system",
+    actor: str | None = None,
+) -> dict:
+    event = OrderStatusEvent(
+        order_id=order_id,
+        from_status=from_status,
+        to_status=to_status,
+        source=source,
+        actor=actor,
+    )
+    db.add(event)
+    db.commit()
+    db.refresh(event)
+    return _order_status_event_to_dict(event)
+
+
+def order_status_event_list(db: Session, order_id: int) -> list[dict]:
+    stmt = (
+        select(OrderStatusEvent)
+        .where(OrderStatusEvent.order_id == order_id)
+        .order_by(OrderStatusEvent.created_at)
+    )
+    return [_order_status_event_to_dict(e) for e in db.scalars(stmt)]
+
+
+def crm_contacts_list(
+    db: Session,
+    *,
+    classification: str | None = None,
+    stage: str | None = None,
+    search: str | None = None,
+    limit: int = 100,
+    offset: int = 0,
+) -> list[dict]:
+    stmt = (
+        select(CrmProfile, Client)
+        .join(Client, CrmProfile.client_id == Client.id)
+        .order_by(CrmProfile.updated_at.desc())
+        .limit(limit)
+        .offset(offset)
+    )
+    if classification:
+        stmt = stmt.where(CrmProfile.classification == classification)
+    if stage:
+        stmt = stmt.where(CrmProfile.lifecycle_stage == stage)
+    if search:
+        stmt = stmt.where(
+            or_(Client.name.ilike(f"%{search}%"), Client.phone.ilike(f"%{search}%"))
+        )
+    rows = db.execute(stmt).all()
+    contacts = []
+    for profile, client in rows:
+        item = _crm_profile_to_dict(profile)
+        item["client"] = _client_to_dict(client)
+        contacts.append(item)
+    return contacts
+
+
+def crm_all_client_ids(db: Session) -> list[int]:
+    return list(db.scalars(select(Client.id).order_by(Client.id)))
+
+
+def _enum_value(value) -> str | None:
+    if value is None:
+        return None
+    return value.value if hasattr(value, "value") else str(value)
+
+
+def _crm_profile_to_dict(profile: CrmProfile) -> dict:
+    return {
+        "id": profile.id,
+        "client_id": profile.client_id,
+        "classification": _enum_value(profile.classification),
+        "lifecycle_stage": _enum_value(profile.lifecycle_stage),
+        "score": profile.score,
+        "last_contact_at": profile.last_contact_at.isoformat() if profile.last_contact_at else None,
+        "last_order_at": profile.last_order_at.isoformat() if profile.last_order_at else None,
+        "last_classified_at": profile.last_classified_at.isoformat() if profile.last_classified_at else None,
+        "next_reengagement_at": (
+            profile.next_reengagement_at.isoformat() if profile.next_reengagement_at else None
+        ),
+        "reengagement_paused": profile.reengagement_paused,
+        "classification_reason": profile.classification_reason,
+        "classification_data": profile.classification_data or {},
+        "rule_version": profile.rule_version,
+        "created_at": profile.created_at.isoformat() if profile.created_at else None,
+        "updated_at": profile.updated_at.isoformat() if profile.updated_at else None,
+    }
+
+
+def _crm_interaction_to_dict(interaction: CrmInteraction) -> dict:
+    return {
+        "id": interaction.id,
+        "client_id": interaction.client_id,
+        "order_id": interaction.order_id,
+        "channel": _enum_value(interaction.channel),
+        "direction": _enum_value(interaction.direction),
+        "event_type": interaction.event_type,
+        "payload": interaction.payload or {},
+        "occurred_at": interaction.occurred_at.isoformat() if interaction.occurred_at else None,
+        "created_at": interaction.created_at.isoformat() if interaction.created_at else None,
+        "idempotency_key": interaction.idempotency_key,
+    }
+
+
+def _crm_classification_event_to_dict(event: CrmClassificationEvent) -> dict:
+    return {
+        "id": event.id,
+        "client_id": event.client_id,
+        "previous_classification": _enum_value(event.previous_classification),
+        "new_classification": _enum_value(event.new_classification),
+        "reason": event.reason,
+        "evidence": event.evidence or {},
+        "rule_version": event.rule_version,
+        "created_at": event.created_at.isoformat() if event.created_at else None,
+    }
+
+
+def _crm_reengagement_task_to_dict(task: CrmReengagementTask) -> dict:
+    return {
+        "id": task.id,
+        "client_id": task.client_id,
+        "order_id": task.order_id,
+        "reason": task.reason,
+        "status": _enum_value(task.status),
+        "scheduled_for": task.scheduled_for.isoformat() if task.scheduled_for else None,
+        "attempt_count": task.attempt_count,
+        "sent_at": task.sent_at.isoformat() if task.sent_at else None,
+        "last_error": task.last_error,
+        "created_at": task.created_at.isoformat() if task.created_at else None,
+        "updated_at": task.updated_at.isoformat() if task.updated_at else None,
+    }
+
+
+def _order_status_event_to_dict(event: OrderStatusEvent) -> dict:
+    return {
+        "id": event.id,
+        "order_id": event.order_id,
+        "from_status": _enum_value(event.from_status),
+        "to_status": _enum_value(event.to_status),
+        "source": event.source,
+        "actor": event.actor,
+        "created_at": event.created_at.isoformat() if event.created_at else None,
+    }

@@ -44,6 +44,7 @@ from app.print_specs.pilot_config import pilot_die_pdf_path, pilot_spec_path
 from app.services.ai_job_control import AIJobCancelled, cancel_job, finish_job, register_job
 from app.services.whatsapp_service import send_preview_to_whatsapp
 from app.services.whatsapp_config import apply_whatsapp_config, mask_secret, merge_blank_with_existing
+from app.services import crm_service, reengagement_service
 from app.web.auth import (
     require_login, create_session, clear_session, get_current_user,
     is_locked_out, record_failed_login, clear_failed_logins,
@@ -259,6 +260,60 @@ def funnel(request: Request, client_id: int | None = None, db: Session = Depends
     return templates.TemplateResponse(request, "funnel.html", ctx)
 
 
+@router.get("/crm/funil", response_class=HTMLResponse)
+def crm_funnel(
+    request: Request,
+    classification: str | None = None,
+    stage: str | None = None,
+    search: str | None = None,
+    db: Session = Depends(get_db),
+):
+    if redirect := _auth(request): return redirect
+
+    crm_service.backfill_crm(db)
+    metrics = crm_service.crm_metrics(db)
+    contacts = repo.crm_contacts_list(
+        db,
+        classification=classification,
+        stage=stage,
+        search=search,
+        limit=50,
+    )
+    tasks = repo.crm_reengagement_list(db, status="pending", limit=25)
+
+    ctx = _base_ctx(request, "crm")
+    ctx["metrics"] = metrics
+    ctx["contacts"] = contacts
+    ctx["tasks"] = tasks
+    ctx["classification"] = classification or ""
+    ctx["stage"] = stage or ""
+    ctx["search"] = search or ""
+    return templates.TemplateResponse(request, "crm_funnel.html", ctx)
+
+
+@router.post("/crm/reengagement/{task_id}/send")
+def crm_reengagement_send(request: Request, task_id: int, db: Session = Depends(get_db)):
+    if redirect := _auth(request): return redirect
+    reengagement_service.mark_task_sent(db, task_id)
+    return RedirectResponse("/crm/funil", status_code=303)
+
+
+@router.post("/crm/reengagement/{task_id}/skip")
+def crm_reengagement_skip(request: Request, task_id: int, note: str = Form("Ignorado pelo operador"),
+                          db: Session = Depends(get_db)):
+    if redirect := _auth(request): return redirect
+    reengagement_service.skip_task(db, task_id, note=note)
+    return RedirectResponse("/crm/funil", status_code=303)
+
+
+@router.post("/crm/reclassify")
+def crm_reclassify_page(request: Request, db: Session = Depends(get_db)):
+    if redirect := _auth(request): return redirect
+    crm_service.backfill_crm(db)
+    crm_service.reclassify_all(db)
+    return RedirectResponse("/crm/funil", status_code=303)
+
+
 # ---------------------------------------------------------------------------
 # Create order (must be before /pedidos/{order_id} to avoid route conflict)
 # ---------------------------------------------------------------------------
@@ -333,7 +388,7 @@ async def order_create_submit(request: Request, db: Session = Depends(get_db)):
     quantidade_raw = form.get("quantidade", "").strip()
     quantidade = int(quantidade_raw) if quantidade_raw.isdigit() else None
 
-    order = repo.order_create(db, int(client_id), template_id, edit_data, quantidade)
+    order = repo.order_create(db, int(client_id), template_id, edit_data, quantidade, source="web")
 
     has_data = any(v for v in edit_data.values() if v and v is not False)
     if has_data:
@@ -438,6 +493,7 @@ async def ai_box_test_generate(
     frase: str = Form("Sua pizza chegou!"),
     tema: str = Form("premium"),
     product_type: str = Form("pizza"),
+    empty_back_panel: str | None = Form(None),
     job_id: str = Form(""),
     reference: UploadFile | None = File(None),
 ):
@@ -446,6 +502,7 @@ async def ai_box_test_generate(
     spec_path = _pilot_spec_path()
     die_pdf_path = _pilot_die_pdf_path()
     job_id = _normalize_ai_test_job_id(job_id)
+    empty_back_panel_enabled = empty_back_panel == "1"
     ctx = _base_ctx(request, "ai_test")
     ctx.update({
         "spec_path": spec_path,
@@ -463,6 +520,7 @@ async def ai_box_test_generate(
             "frase": frase,
             "tema": tema,
             "product_type": product_type,
+            "empty_back_panel": empty_back_panel_enabled,
         },
     })
 
@@ -501,10 +559,12 @@ async def ai_box_test_generate(
                 "instagram": instagram.strip(),
                 "frase": frase.strip(),
                 "tema_fundo": tema,
+                "empty_back_panel": empty_back_panel_enabled,
             },
             reference_paths=references,
             fit_mode="cover",
             tac_max=300,
+            empty_back_panel=empty_back_panel_enabled,
             cancel_event=cancel_event,
         )
     except AIUnavailable as e:
@@ -648,13 +708,13 @@ def order_reject(order_id: int, feedback: str = Form(...), db: Session = Depends
         if rev:
             rev.feedback = feedback
             db.commit()
-    repo.order_update_status(db, order_id, "revision")
+    repo.order_update_status(db, order_id, "revision", source="web")
     return RedirectResponse(f"/pedidos/{order_id}", status_code=303)
 
 
 @router.post("/pedidos/{order_id}/deliver")
 def order_deliver(order_id: int, db: Session = Depends(get_db)):
-    repo.order_update_status(db, order_id, "delivered")
+    repo.order_update_status(db, order_id, "delivered", source="web")
     return RedirectResponse(f"/pedidos/{order_id}", status_code=303)
 
 

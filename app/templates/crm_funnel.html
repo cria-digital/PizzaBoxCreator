@@ -1,0 +1,202 @@
+{% extends "base.html" %}
+{% block title %}CRM e Funil - Pizza Box Agent{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-4">
+  <div>
+    <h2 class="mb-1">CRM e Funil</h2>
+    <div class="text-muted small">Unidade: {{ metrics.unit|replace('_', ' ') }} · Fuso: {{ metrics.timezone }}</div>
+  </div>
+  <form method="post" action="/crm/reclassify">
+    <button class="btn btn-outline-dark btn-sm" type="submit">
+      <i class="bi bi-arrow-repeat"></i> Reclassificar
+    </button>
+  </form>
+</div>
+
+<div class="row g-3 mb-4">
+  <div class="col-md-3">
+    <div class="card stat-card shadow-sm h-100">
+      <div class="card-body">
+        <div class="stat-label">Contatos</div>
+        <div class="stat-number">{{ metrics.contacts_total }}</div>
+      </div>
+    </div>
+  </div>
+  <div class="col-md-3">
+    <div class="card stat-card shadow-sm h-100">
+      <div class="card-body">
+        <div class="stat-label">VIPs</div>
+        <div class="stat-number">{{ metrics.vip_count }}</div>
+      </div>
+    </div>
+  </div>
+  <div class="col-md-3">
+    <div class="card stat-card shadow-sm h-100">
+      <div class="card-body">
+        <div class="stat-label">Abandonos</div>
+        <div class="stat-number">{{ metrics.abandoned_count }}</div>
+      </div>
+    </div>
+  </div>
+  <div class="col-md-3">
+    <div class="card stat-card shadow-sm h-100">
+      <div class="card-body">
+        <div class="stat-label">Reengajamento pendente</div>
+        <div class="stat-number">{{ metrics.reengagement.get('pending', 0) }}</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="row g-4 mb-4">
+  <div class="col-lg-7">
+    <div class="card shadow-sm h-100">
+      <div class="card-header bg-white fw-semibold">
+        <i class="bi bi-bar-chart-line"></i> Conversoes
+      </div>
+      <div class="card-body">
+        {% set conversions = [
+          ('Lead -> pedido', metrics.conversions.lead_to_order),
+          ('Pedido -> preview', metrics.conversions.order_to_preview),
+          ('Preview -> aprovado', metrics.conversions.preview_to_approved),
+          ('Aprovado -> entregue', metrics.conversions.approved_to_delivered)
+        ] %}
+        {% for label, value in conversions %}
+        <div class="mb-3">
+          <div class="d-flex justify-content-between small mb-1">
+            <span>{{ label }}</span>
+            <strong>{% if value is none %}N/A{% else %}{{ (value * 100)|round(1) }}%{% endif %}</strong>
+          </div>
+          <div class="progress" style="height: 10px;">
+            <div class="progress-bar progress-bar-brand" style="width: {{ 0 if value is none else value * 100 }}%"></div>
+          </div>
+        </div>
+        {% endfor %}
+      </div>
+    </div>
+  </div>
+  <div class="col-lg-5">
+    <div class="card shadow-sm h-100">
+      <div class="card-header bg-white fw-semibold">
+        <i class="bi bi-diagram-3"></i> Etapas atuais
+      </div>
+      <div class="card-body">
+        {% for stage, count in metrics.by_stage.items() %}
+        <a class="d-flex justify-content-between align-items-center text-decoration-none text-dark py-2 border-bottom"
+           href="/crm/funil?stage={{ stage }}">
+          <span>{{ stage|replace('_', ' ') }}</span>
+          <span class="badge text-bg-light">{{ count }}</span>
+        </a>
+        {% endfor %}
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="row g-4">
+  <div class="col-xl-8">
+    <div class="card shadow-sm">
+      <div class="card-header bg-white">
+        <form class="row g-2 align-items-end" method="get" action="/crm/funil">
+          <div class="col-md-4">
+            <label class="form-label small text-muted">Buscar</label>
+            <input class="form-control form-control-sm" name="search" value="{{ search }}" placeholder="Nome ou telefone">
+          </div>
+          <div class="col-md-3">
+            <label class="form-label small text-muted">Classificacao</label>
+            <select class="form-select form-select-sm" name="classification">
+              <option value="">Todas</option>
+              {% for item in metrics.by_classification.keys() %}
+              <option value="{{ item }}" {% if classification == item %}selected{% endif %}>{{ item|replace('_', ' ') }}</option>
+              {% endfor %}
+            </select>
+          </div>
+          <div class="col-md-3">
+            <label class="form-label small text-muted">Etapa</label>
+            <select class="form-select form-select-sm" name="stage">
+              <option value="">Todas</option>
+              {% for item in metrics.by_stage.keys() %}
+              <option value="{{ item }}" {% if stage == item %}selected{% endif %}>{{ item|replace('_', ' ') }}</option>
+              {% endfor %}
+            </select>
+          </div>
+          <div class="col-md-2">
+            <button class="btn btn-dark-brand btn-sm w-100" type="submit">
+              <i class="bi bi-search"></i> Filtrar
+            </button>
+          </div>
+        </form>
+      </div>
+      <div class="table-responsive">
+        <table class="table table-hover align-middle mb-0">
+          <thead>
+            <tr>
+              <th>Contato</th>
+              <th>Classificacao</th>
+              <th>Etapa</th>
+              <th>Ultima interacao</th>
+              <th>Motivo</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for item in contacts %}
+            <tr>
+              <td>
+                <a href="/clientes?search={{ item.client.phone }}" class="fw-semibold text-decoration-none">
+                  {{ item.client.name }}
+                </a>
+                <div class="text-muted small">{{ item.client.phone }}</div>
+              </td>
+              <td><span class="badge text-bg-light">{{ item.classification|replace('_', ' ') }}</span></td>
+              <td>{{ item.lifecycle_stage|replace('_', ' ') }}</td>
+              <td class="small">{{ item.last_contact_at or '-' }}</td>
+              <td class="small text-muted">{{ item.classification_reason or '-' }}</td>
+            </tr>
+            {% endfor %}
+            {% if not contacts %}
+            <tr><td colspan="5" class="text-center text-muted py-4">Nenhum contato CRM encontrado.</td></tr>
+            {% endif %}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <div class="col-xl-4">
+    <div class="card shadow-sm">
+      <div class="card-header bg-white fw-semibold">
+        <i class="bi bi-chat-dots"></i> Reengajamento assistido
+      </div>
+      <div class="list-group list-group-flush">
+        {% for task in tasks %}
+        <div class="list-group-item">
+          <div class="d-flex justify-content-between gap-2">
+            <div>
+              <div class="fw-semibold">{{ task.client_name }}</div>
+              <div class="text-muted small">{{ task.reason|replace('_', ' ') }}</div>
+              <div class="text-muted small">{{ task.scheduled_for }}</div>
+            </div>
+            <div class="d-flex gap-1 align-items-start">
+              <form method="post" action="/crm/reengagement/{{ task.id }}/send">
+                <button class="btn btn-sm btn-outline-success" title="Marcar como enviado">
+                  <i class="bi bi-check2"></i>
+                </button>
+              </form>
+              <form method="post" action="/crm/reengagement/{{ task.id }}/skip">
+                <button class="btn btn-sm btn-outline-secondary" title="Ignorar">
+                  <i class="bi bi-slash-circle"></i>
+                </button>
+              </form>
+            </div>
+          </div>
+        </div>
+        {% endfor %}
+        {% if not tasks %}
+        <div class="list-group-item text-center text-muted py-4">Nenhuma tarefa pendente.</div>
+        {% endif %}
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}
