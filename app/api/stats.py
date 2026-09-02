@@ -2,33 +2,23 @@
 
 from __future__ import annotations
 
-import logging
-import os
-import shutil
-from pathlib import Path
-
 from fastapi import APIRouter, Depends
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
-from app.config import settings
 from app.api.auth import require_api_user
 from app.db.session import get_db
-from app.db.models import Client, Order, OrderRevision, Template
+from app.db.models import Client, Order, Template
+from app.services import storage_service
 
-logger = logging.getLogger(__name__)
-router = APIRouter(tags=["stats"], dependencies=[Depends(require_api_user)])
-
-
-def _dir_size_mb(path: Path) -> float:
-    if not path.exists():
-        return 0.0
-    total = sum(f.stat().st_size for f in path.rglob("*") if f.is_file())
-    return round(total / (1024 * 1024), 1)
+router = APIRouter(tags=["stats"])
 
 
 @router.get("/stats")
-def get_stats(db: Session = Depends(get_db)):
+def get_stats(
+    db: Session = Depends(get_db),
+    username: str = Depends(require_api_user),
+):
     orders_by_status = {}
     for status_val, cnt in db.execute(
         select(Order.status, func.count()).group_by(Order.status)
@@ -66,7 +56,11 @@ def get_stats(db: Session = Depends(get_db)):
             "template_name": row.template_name,
         })
 
-    disk = shutil.disk_usage(str(settings.output_dir.resolve()))
+    disk_usage = storage_service.get_storage_snapshot(
+        db,
+        emit_alerts=False,
+        username=username,
+    )
 
     return {
         "orders_by_status": orders_by_status,
@@ -74,114 +68,47 @@ def get_stats(db: Session = Depends(get_db)):
         "total_clients": total_clients,
         "total_templates": total_templates,
         "recent_orders": recent_orders,
-        "disk_usage": {
-            "total_gb": round(disk.total / (1024 ** 3), 1),
-            "used_gb": round(disk.used / (1024 ** 3), 1),
-            "free_gb": round(disk.free / (1024 ** 3), 1),
-            "percent_used": round(disk.used / disk.total * 100, 1),
-            "storage_breakdown": {
-                "output_psd_mb": _dir_size_mb(settings.output_dir),
-                "preview_jpg_mb": _dir_size_mb(settings.preview_dir),
-                "templates_mb": _dir_size_mb(settings.templates_dir),
-                "thumbnails_mb": _dir_size_mb(settings.thumbnails_dir),
-                "temp_mb": _dir_size_mb(settings.temp_dir),
-            },
-        },
+        "disk_usage": disk_usage,
     }
 
 
 @router.get("/cleanup/preview")
-def cleanup_preview(db: Session = Depends(get_db)):
+def cleanup_preview(
+    db: Session = Depends(get_db),
+    username: str = Depends(require_api_user),
+):
     """Preview what cleanup would delete, without actually deleting."""
-    delivered = db.execute(
-        select(Order).where(Order.status == "delivered")
-    ).scalars().all()
-
-    files_to_delete = []
-    total_bytes = 0
-
-    for order in delivered:
-        for field in ("output_psd", "preview_jpg", "cmyk_psd"):
-            path_str = getattr(order, field)
-            if path_str:
-                p = Path(path_str)
-                if p.exists():
-                    size = p.stat().st_size
-                    files_to_delete.append({"path": str(p), "size_kb": round(size / 1024, 1)})
-                    total_bytes += size
-
-        revisions = db.execute(
-            select(OrderRevision).where(OrderRevision.order_id == order.id)
-        ).scalars().all()
-        for rev in revisions:
-            if rev.preview_jpg:
-                p = Path(rev.preview_jpg)
-                if p.exists():
-                    size = p.stat().st_size
-                    files_to_delete.append({"path": str(p), "size_kb": round(size / 1024, 1)})
-                    total_bytes += size
-
-    temp_files = []
-    for f in settings.temp_dir.rglob("*"):
-        if f.is_file() and f.name != ".gitkeep":
-            size = f.stat().st_size
-            temp_files.append({"path": str(f), "size_kb": round(size / 1024, 1)})
-            total_bytes += size
-
-    return {
-        "delivered_orders": len(delivered),
-        "files_from_delivered": len(files_to_delete),
-        "temp_files": len(temp_files),
-        "total_files": len(files_to_delete) + len(temp_files),
-        "total_mb": round(total_bytes / (1024 * 1024), 1),
-    }
+    return storage_service.cleanup_preview(db, username=username)
 
 
 @router.post("/cleanup/execute")
-def cleanup_execute(db: Session = Depends(get_db)):
+def cleanup_execute(
+    db: Session = Depends(get_db),
+    username: str = Depends(require_api_user),
+):
     """Delete files from delivered orders and temp directory."""
-    delivered = db.execute(
-        select(Order).where(Order.status == "delivered")
-    ).scalars().all()
+    return storage_service.cleanup_execute(db, username=username)
 
-    deleted_count = 0
-    freed_bytes = 0
 
-    for order in delivered:
-        for field in ("output_psd", "preview_jpg", "cmyk_psd"):
-            path_str = getattr(order, field)
-            if path_str:
-                p = Path(path_str)
-                if p.exists():
-                    freed_bytes += p.stat().st_size
-                    p.unlink()
-                    deleted_count += 1
+@router.get("/storage")
+def storage_snapshot(
+    db: Session = Depends(get_db),
+    username: str = Depends(require_api_user),
+):
+    return storage_service.get_storage_snapshot(db, emit_alerts=True, username=username)
 
-        revisions = db.execute(
-            select(OrderRevision).where(OrderRevision.order_id == order.id)
-        ).scalars().all()
-        for rev in revisions:
-            if rev.preview_jpg:
-                p = Path(rev.preview_jpg)
-                if p.exists():
-                    freed_bytes += p.stat().st_size
-                    p.unlink()
-                    deleted_count += 1
 
-        order.output_psd = None
-        order.preview_jpg = None
-        order.cmyk_psd = None
+@router.get("/storage/cleanup/preview")
+def storage_cleanup_preview(
+    db: Session = Depends(get_db),
+    username: str = Depends(require_api_user),
+):
+    return storage_service.cleanup_preview(db, username=username)
 
-    for f in settings.temp_dir.rglob("*"):
-        if f.is_file() and f.name != ".gitkeep":
-            freed_bytes += f.stat().st_size
-            f.unlink()
-            deleted_count += 1
 
-    db.commit()
-    logger.info("Cleanup: %d files deleted, %.1f MB freed", deleted_count, freed_bytes / 1024 / 1024)
-
-    return {
-        "deleted_files": deleted_count,
-        "freed_mb": round(freed_bytes / (1024 * 1024), 1),
-    }
+@router.post("/storage/cleanup/execute")
+def storage_cleanup_execute(
+    db: Session = Depends(get_db),
+    username: str = Depends(require_api_user),
+):
+    return storage_service.cleanup_execute(db, username=username)

@@ -36,6 +36,8 @@ def db_path(tmp_path, monkeypatch):
     monkeypatch.setattr(settings, "templates_dir", tmp_path / "gabaritos")
     monkeypatch.setattr(settings, "output_dir", tmp_path / "output")
     monkeypatch.setattr(settings, "preview_dir", tmp_path / "preview")
+    monkeypatch.setattr(settings, "backups_dir", tmp_path / "backups")
+    monkeypatch.setattr(settings, "logs_dir", tmp_path / "logs")
     monkeypatch.setattr(settings, "temp_dir", tmp_path / "temp")
     monkeypatch.setattr(settings, "thumbnails_dir", tmp_path / "thumbnails")
     monkeypatch.setattr(settings, "logos_dir", tmp_path / "logos")

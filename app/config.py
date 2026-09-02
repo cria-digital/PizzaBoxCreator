@@ -33,6 +33,8 @@ class Settings(BaseSettings):
     output_dir: Path = Path("storage/output")
     art_masters_dir: Path = Path("storage/art_masters")
     preview_dir: Path = Path("storage/preview")
+    backups_dir: Path = Path("storage/backups")
+    logs_dir: Path = Path("storage/logs")
     temp_dir: Path = Path("temp")
     database_url: str = "sqlite:///storage/pizzabox.db"
     db_path: Path = Path("storage/pizzabox.db")
@@ -74,6 +76,15 @@ class Settings(BaseSettings):
     crm_inactive_days: int = 90
     crm_rule_version: str = "crm-v1"
 
+    storage_warning_threshold_percent: float = 80.0
+    storage_critical_threshold_percent: float = 90.0
+    storage_cleanup_enabled: bool = False
+    storage_cleanup_dry_run: bool = True
+    storage_retention_delivered_days: int = 30
+    storage_retention_temp_hours: int = 24
+    storage_backup_max_files: int = 30
+    storage_alert_cooldown_hours: int = 24
+
     meta_whatsapp_token: str = ""
     meta_phone_number_id: str = ""
     meta_webhook_verify_token: str = ""
@@ -113,8 +124,17 @@ class Settings(BaseSettings):
         return self
 
     def ensure_dirs(self):
-        for d in [self.templates_dir, self.output_dir, self.art_masters_dir, self.preview_dir, self.temp_dir,
-                  self.thumbnails_dir, self.logos_dir]:
+        for d in [
+            self.templates_dir,
+            self.output_dir,
+            self.art_masters_dir,
+            self.preview_dir,
+            self.backups_dir,
+            self.logs_dir,
+            self.temp_dir,
+            self.thumbnails_dir,
+            self.logos_dir,
+        ]:
             d.mkdir(parents=True, exist_ok=True)
 
 

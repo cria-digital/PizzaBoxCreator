@@ -6,7 +6,6 @@ import html
 import re
 import json
 import logging
-import shutil
 import uuid
 from pathlib import Path
 
@@ -45,6 +44,7 @@ from app.services.ai_job_control import AIJobCancelled, cancel_job, finish_job, 
 from app.services.whatsapp_service import send_preview_to_whatsapp
 from app.services.whatsapp_config import apply_whatsapp_config, mask_secret, merge_blank_with_existing
 from app.services import crm_service, reengagement_service
+from app.services import storage_service
 from app.web.auth import (
     require_login, create_session, clear_session, get_current_user,
     is_locked_out, record_failed_login, clear_failed_logins,
@@ -180,12 +180,7 @@ def dashboard(request: Request, db: Session = Depends(get_db)):
             "template_name": row.template_name,
         })
 
-    disk = shutil.disk_usage(str(settings.output_dir.resolve()))
-
-    def dir_size_mb(p: Path) -> float:
-        if not p.exists():
-            return 0.0
-        return round(sum(f.stat().st_size for f in p.rglob("*") if f.is_file()) / (1024 * 1024), 1)
+    username = get_current_user(request) or "system"
 
     stats = {
         "orders_by_status": orders_by_status,
@@ -193,19 +188,11 @@ def dashboard(request: Request, db: Session = Depends(get_db)):
         "total_clients": total_clients,
         "total_templates": total_templates,
         "recent_orders": recent_orders,
-        "disk_usage": {
-            "total_gb": round(disk.total / (1024 ** 3), 1),
-            "used_gb": round(disk.used / (1024 ** 3), 1),
-            "free_gb": round(disk.free / (1024 ** 3), 1),
-            "percent_used": round(disk.used / disk.total * 100, 1),
-            "storage_breakdown": {
-                "output_psd_mb": dir_size_mb(settings.output_dir),
-                "preview_jpg_mb": dir_size_mb(settings.preview_dir),
-                "templates_mb": dir_size_mb(settings.templates_dir),
-                "thumbnails_mb": dir_size_mb(settings.thumbnails_dir),
-                "temp_mb": dir_size_mb(settings.temp_dir),
-            },
-        },
+        "disk_usage": storage_service.get_storage_snapshot(
+            db,
+            emit_alerts=True,
+            username=username,
+        ),
     }
 
     ctx = _base_ctx(request, "dashboard")
@@ -802,10 +789,9 @@ def get_template_fields(request: Request, template_id: int, db: Session = Depend
 
 
 @router.get("/web/cleanup-preview", response_class=HTMLResponse)
-def cleanup_preview_partial(request: Request):
+def cleanup_preview_partial(request: Request, db: Session = Depends(get_db)):
     if redirect := _auth(request): return redirect
-    from app.api.stats import cleanup_preview
-    data = cleanup_preview()
+    data = storage_service.cleanup_preview(db, username=get_current_user(request) or "system")
 
     if data["total_files"] == 0:
         return HTMLResponse("""
@@ -820,6 +806,12 @@ def cleanup_preview_partial(request: Request):
                 <span>Pedidos entregues</span><strong>{data['delivered_orders']}</strong>
             </div>
             <div class="d-flex justify-content-between">
+                <span>Temporarios</span><strong>{data['temp_files']}</strong>
+            </div>
+            <div class="d-flex justify-content-between">
+                <span>Backups antigos</span><strong>{data['backup_files']}</strong>
+            </div>
+            <div class="d-flex justify-content-between">
                 <span>Arquivos para deletar</span><strong>{data['total_files']}</strong>
             </div>
             <div class="d-flex justify-content-between">
@@ -831,17 +823,16 @@ def cleanup_preview_partial(request: Request):
                 hx-post="/web/cleanup-execute"
                 hx-target="#cleanupArea"
                 hx-swap="innerHTML"
-                hx-confirm="Tem certeza? Isto vai apagar os arquivos de pedidos entregues.">
+                hx-confirm="Tem certeza? Isto vai apagar apenas arquivos elegiveis pela politica de retencao.">
             <i class="bi bi-trash3"></i> Limpar {data['total_mb']} MB
         </button>
     """)
 
 
 @router.post("/web/cleanup-execute", response_class=HTMLResponse)
-def cleanup_execute_partial(request: Request):
+def cleanup_execute_partial(request: Request, db: Session = Depends(get_db)):
     if redirect := _auth(request): return redirect
-    from app.api.stats import cleanup_execute
-    data = cleanup_execute()
+    data = storage_service.cleanup_execute(db, username=get_current_user(request) or "system")
 
     return HTMLResponse(f"""
         <div class="text-center py-2">

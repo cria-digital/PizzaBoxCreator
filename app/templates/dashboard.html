@@ -36,15 +36,15 @@
     </div>
   </div>
   <div class="col-md-3">
-    <div class="card stat-card {{ 'stat-card-orange' if stats.disk_usage.percent_used <= 80 else 'stat-card-dark' }} shadow-sm">
+    <div class="card stat-card {{ 'stat-card-orange' if stats.disk_usage.status == 'ok' else 'stat-card-dark' }} shadow-sm">
       <div class="card-body text-center py-4">
-        <div class="stat-icon-stamp" style="color: {{ 'var(--brand-orange)' if stats.disk_usage.percent_used <= 60 else '#E53935' if stats.disk_usage.percent_used > 80 else '#FFA000' }}">
+        <div class="stat-icon-stamp" style="color: {{ 'var(--brand-orange)' if stats.disk_usage.status == 'ok' else '#E53935' if stats.disk_usage.status == 'critical' else '#FFA000' }}">
           <i class="bi bi-hdd"></i>
         </div>
-        <div class="stat-number" style="color: {{ 'var(--brand-orange)' if stats.disk_usage.percent_used <= 60 else '#E53935' if stats.disk_usage.percent_used > 80 else '#FFA000' }}">
+        <div class="stat-number" style="color: {{ 'var(--brand-orange)' if stats.disk_usage.status == 'ok' else '#E53935' if stats.disk_usage.status == 'critical' else '#FFA000' }}">
           {{ stats.disk_usage.percent_used }}%
         </div>
-        <div class="stat-label mt-1">Disco Usado</div>
+        <div class="stat-label mt-1">Disco {{ 'Critico' if stats.disk_usage.status == 'critical' else 'Atencao' if stats.disk_usage.status == 'warning' else 'Usado' }}</div>
       </div>
     </div>
   </div>
@@ -84,26 +84,39 @@
       </div>
       <div class="card-body pt-2">
         <div class="progress mb-3" style="height: 26px; border-radius: 10px;">
-          <div class="progress-bar {{ 'progress-bar-danger' if stats.disk_usage.percent_used > 80 else 'progress-bar-brand' }}"
+          <div class="progress-bar {{ 'progress-bar-danger' if stats.disk_usage.status in ['warning', 'critical'] else 'progress-bar-brand' }}"
                style="width: {{ stats.disk_usage.percent_used }}%; font-weight: 600; font-size: 0.8rem;">
             {{ stats.disk_usage.used_gb }} GB / {{ stats.disk_usage.total_gb }} GB
           </div>
         </div>
         <div class="text-muted small mb-3">
           Livre: <strong>{{ stats.disk_usage.free_gb }} GB</strong>
+          <span class="ms-2">Limites: {{ stats.disk_usage.thresholds.warning }}% / {{ stats.disk_usage.thresholds.critical }}%</span>
         </div>
         {% set bd = stats.disk_usage.storage_breakdown %}
         <div class="disk-row"><span>PSDs produzidos</span><strong>{{ bd.output_psd_mb }} MB</strong></div>
         <div class="disk-row"><span>Previews</span><strong>{{ bd.preview_jpg_mb }} MB</strong></div>
         <div class="disk-row"><span>Templates</span><strong>{{ bd.templates_mb }} MB</strong></div>
+        <div class="disk-row"><span>Logos</span><strong>{{ bd.logos_mb }} MB</strong></div>
+        <div class="disk-row"><span>Backups</span><strong>{{ bd.backups_mb }} MB</strong></div>
         <div class="disk-row"><span>Thumbnails</span><strong>{{ bd.thumbnails_mb }} MB</strong></div>
         <div class="disk-row"><span>Temporarios</span><strong>{{ bd.temp_mb }} MB</strong></div>
 
-        {% if stats.disk_usage.percent_used > 80 %}
+        {% if stats.disk_usage.status == 'critical' %}
+        <div class="alert alert-danger mt-3 mb-0 py-2 small">
+          <i class="bi bi-exclamation-octagon-fill"></i> Uso critico de disco. Revise a limpeza agora.
+        </div>
+        {% elif stats.disk_usage.status == 'warning' %}
         <div class="alert alert-brand mt-3 mb-0 py-2 small">
-          <i class="bi bi-exclamation-triangle-fill"></i> Disco quase cheio!
+          <i class="bi bi-exclamation-triangle-fill"></i> Disco acima do limite de atencao.
         </div>
         {% endif %}
+
+        <div class="text-muted small mt-3">
+          Limpeza estimada:
+          <strong>{{ stats.disk_usage.cleanup_estimate.files }}</strong> arquivos /
+          <strong>{{ stats.disk_usage.cleanup_estimate.freed_mb }} MB</strong>
+        </div>
 
         <hr class="my-2">
         <div id="cleanupArea">

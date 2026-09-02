@@ -487,6 +487,7 @@ logo, arte plana e JSON de posições. Veja
 |---|---|
 | [docs/VISAO_GERAL_DO_PROJETO.md](docs/VISAO_GERAL_DO_PROJETO.md) | Visão do produto, fluxos, arquitetura e limites |
 | [docs/SDD_CRM_E_FUNIL.md](docs/SDD_CRM_E_FUNIL.md) | Especificação do CRM, classificação, reengajamento e funil |
+| [docs/SDD_GERENCIAMENTO_ARMAZENAMENTO.md](docs/SDD_GERENCIAMENTO_ARMAZENAMENTO.md) | Especificação do dashboard de storage, alertas e retenção automática |
 | [docs/PREPARACAO_GABARITO.md](docs/PREPARACAO_GABARITO.md) | **Designer** — como preparar o PSD |
 | [docs/ARQUITETURA_OPERACIONAL.md](docs/ARQUITETURA_OPERACIONAL.md) | Arquitetura atual, deploy e pendências |
 | [docs/GO_LIVE_CHECKLIST.md](docs/GO_LIVE_CHECKLIST.md) | Checklist de deploy, variáveis e validação |
