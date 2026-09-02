@@ -1,5 +1,4 @@
 # PizzaBoxCreator
-
 Monorepo do Pizza Box Creator.
 
 ## Estrutura
